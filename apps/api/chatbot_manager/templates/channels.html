@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head"><h1>Channels</h1><p>Copy these webhook URLs into LINE and Facebook developer settings.</p></section>
+<section class="grid">
+  <article class="panel">
+    <h2>LINE</h2>
+    <p>Webhook URL: <code>{{ line_webhook }}</code></p>
+    <p>Status: {{ "Ready" if settings.line_channel_access_token else "Needs channel access token" }}</p>
+  </article>
+  <article class="panel">
+    <h2>Messenger</h2>
+    <p>Webhook URL: <code>{{ messenger_webhook }}</code></p>
+    <p>Verify token: <code>{{ settings.messenger_verify_token }}</code></p>
+    <p>Status: {{ "Ready" if settings.messenger_page_access_token else "Needs page access token" }}</p>
+  </article>
+</section>
+{% endblock %}

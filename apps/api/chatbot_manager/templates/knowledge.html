@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+  <h1>Knowledge</h1>
+  <p>Upload documents for RAG-Anything indexing.</p>
+</section>
+
+<form class="panel form-grid" method="post" action="/knowledge" enctype="multipart/form-data">
+  <label class="wide">Upload document <input type="file" name="file" required></label>
+  <button type="submit">Upload index</button>
+</form>
+
+<table class="data-table" id="knowledge-table">
+  <thead><tr><th>File</th><th>Status</th><th>Indexed</th><th>Error</th><th>Action</th></tr></thead>
+  <tbody>
+    {% for document in documents %}
+    <tr data-document-id="{{ document.id }}">
+      <td>{{ document.filename }}</td>
+      <td data-field="status">{{ document.status }}</td>
+      <td data-field="indexed_at">{{ document.indexed_at or "" }}</td>
+      <td data-field="error">{{ document.error }}</td>
+      <td>
+        <form method="post" action="/knowledge/{{ document.id }}/reindex">
+          <button type="submit">Reindex</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p id="knowledge-status" class="graph-status" role="status"></p>
+
+<script>
+  const knowledgeTableBody = document.querySelector("#knowledge-table tbody");
+  const knowledgeStatus = document.getElementById("knowledge-status");
+
+  function renderKnowledgeDocuments(documents) {
+    knowledgeTableBody.innerHTML = documents.map((document) => `
+      <tr data-document-id="${document.id}">
+        <td>${escapeHtml(document.filename)}</td>
+        <td data-field="status">${escapeHtml(document.status)}</td>
+        <td data-field="indexed_at">${escapeHtml(document.indexed_at || "")}</td>
+        <td data-field="error">${escapeHtml(document.error || "")}</td>
+        <td>
+          <form method="post" action="/knowledge/${document.id}/reindex">
+            <button type="submit">Reindex</button>
+          </form>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  async function refreshKnowledgeDocuments() {
+    try {
+      const response = await fetch("/api/knowledge-documents");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Could not refresh document status.");
+      renderKnowledgeDocuments(payload.documents || []);
+      const pendingCount = (payload.documents || []).filter((document) => document.status === "pending").length;
+      knowledgeStatus.textContent = pendingCount ? `${pendingCount} document${pendingCount === 1 ? "" : "s"} indexing...` : "";
+      if (!pendingCount) window.clearInterval(knowledgePoller);
+    } catch (error) {
+      knowledgeStatus.textContent = error.message;
+    }
+  }
+
+  const hasPendingDocuments = Array.from(document.querySelectorAll('[data-field="status"]'))
+    .some((cell) => cell.textContent.trim() === "pending");
+  const knowledgePoller = window.setInterval(refreshKnowledgeDocuments, 3000);
+  if (!hasPendingDocuments) window.clearInterval(knowledgePoller);
+</script>
+{% endblock %}

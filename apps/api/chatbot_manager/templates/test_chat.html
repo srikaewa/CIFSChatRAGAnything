@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head"><h1>Test Chat</h1><p>Try a user message before connecting live channels.</p></section>
+<form class="panel form-grid" method="post" action="/test-chat">
+  <label class="wide">User message <textarea name="message" rows="3">{{ message }}</textarea></label>
+  <button type="submit">Send test</button>
+</form>
+{% if reply %}
+<section class="panel result">
+  <h2>Bot reply</h2>
+  <p>{{ reply }}</p>
+  <small>Source: {{ source }}</small>
+</section>
+{% endif %}
+{% endblock %}

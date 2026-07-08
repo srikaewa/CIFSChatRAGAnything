@@ -1,0 +1,427 @@
+:root {
+  color-scheme: light;
+  --bg: oklch(0.97 0.006 210);
+  --panel: oklch(0.995 0.004 210);
+  --ink: oklch(0.22 0.025 235);
+  --muted: oklch(0.48 0.02 235);
+  --line: oklch(0.84 0.012 235);
+  --accent: oklch(0.56 0.13 175);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Aptos", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 240px;
+  padding: 24px 16px;
+  background: oklch(0.25 0.04 235);
+  color: oklch(0.96 0.006 210);
+}
+
+.brand {
+  font-weight: 800;
+  margin-bottom: 28px;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 6px;
+}
+
+.sidebar a {
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: oklch(0.88 0.012 220);
+}
+
+.sidebar a.active,
+.sidebar a:hover {
+  background: oklch(0.34 0.055 235);
+  color: oklch(0.98 0.004 210);
+}
+
+.main {
+  margin-left: 240px;
+  min-height: 100vh;
+  padding: 24px 32px 48px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+  color: var(--muted);
+}
+
+.topbar button,
+.login-panel button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--accent);
+  color: oklch(0.99 0.004 175);
+  cursor: pointer;
+}
+
+.page-head {
+  max-width: 760px;
+  margin-bottom: 24px;
+}
+
+.page-head h1 {
+  font-size: 2rem;
+  margin: 0 0 8px;
+}
+
+.page-head p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.panel,
+.login-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.panel p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.login-body {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-panel {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+}
+
+.login-panel h1 {
+  margin: 0 0 8px;
+}
+
+.login-panel label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.login-panel input,
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: oklch(1 0 0);
+  color: var(--ink);
+}
+
+.error {
+  color: oklch(0.52 0.17 28);
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    position: static;
+    width: auto;
+  }
+
+  .main {
+    margin-left: 0;
+    padding: 20px;
+  }
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.data-table th {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.data-table button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: oklch(0.98 0.004 210);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.result {
+  margin-top: 20px;
+}
+
+.result h2 {
+  margin: 0 0 8px;
+}
+
+.result small {
+  color: var(--muted);
+}
+
+.graph-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 1fr) minmax(140px, 0.8fr) 96px 110px 140px auto;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 20px;
+}
+
+.graph-controls label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.graph-controls button,
+.graph-secondary-action {
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 16px;
+  background: var(--accent);
+  color: oklch(0.99 0.004 175);
+  cursor: pointer;
+}
+
+.graph-secondary-action {
+  width: 100%;
+  margin: 0 0 18px;
+}
+
+.graph-secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.graph-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.graph-canvas-wrap,
+.graph-detail {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.graph-canvas-wrap {
+  position: relative;
+  min-height: 560px;
+  overflow: hidden;
+}
+
+.graph-canvas {
+  width: 100%;
+  height: 560px;
+  display: block;
+}
+
+.graph-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  padding: 24px;
+  text-align: center;
+}
+
+.graph-empty[hidden] {
+  display: none;
+}
+
+.graph-edge {
+  stroke: oklch(0.68 0.025 225);
+  stroke-width: 1.5;
+}
+
+.graph-edge-label {
+  fill: var(--muted);
+  font-size: 0.72rem;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 4px;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.graph-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.graph-node circle {
+  fill: oklch(0.9 0.045 178);
+  stroke: oklch(0.54 0.12 175);
+  stroke-width: 2;
+}
+
+.graph-node:hover circle,
+.graph-node:focus circle {
+  fill: oklch(0.84 0.07 178);
+}
+
+.graph-node text {
+  fill: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.graph-detail {
+  padding: 20px;
+  min-width: 0;
+}
+
+.graph-detail h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.graph-detail h3 {
+  margin: 18px 0 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.graph-detail p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.graph-detail pre {
+  margin: 0;
+  padding: 14px;
+  border-radius: 8px;
+  background: oklch(0.96 0.006 210);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  overflow: auto;
+  max-height: 420px;
+  white-space: pre-wrap;
+}
+
+.graph-neighbor-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  max-height: 150px;
+  overflow: auto;
+  padding: 0;
+}
+
+.graph-neighbor-list li {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+}
+
+.graph-status {
+  color: var(--muted);
+  margin: 16px 0 0;
+}
+
+@media (max-width: 980px) {
+  .graph-controls,
+  .graph-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-canvas-wrap {
+    min-height: 420px;
+  }
+
+  .graph-canvas {
+    height: 420px;
+  }
+}

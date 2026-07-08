@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+  <h1>Knowledge Graph</h1>
+  <p>Explore concept relationships from the RAG-Anything index.</p>
+</section>
+
+<form id="graph-form" class="panel graph-controls">
+  <label>Entity label <select id="entity-label-select" name="label" required><option value="{{ default_label }}">{{ default_label }}</option></select></label>
+  <label>Search <input id="graph-search" type="search" placeholder="Filter loaded graph"></label>
+  <label>Type <select id="graph-node-type-filter"><option value="">All types</option></select></label>
+  <label>Depth <input name="max_depth" type="number" min="1" max="5" value="{{ default_max_depth }}"></label>
+  <label>Nodes <input name="max_nodes" type="number" min="1" max="500" value="{{ default_max_nodes }}"></label>
+  <label>Layout
+    <select id="graph-layout-select">
+      <option value="cose">cose</option>
+      <option value="concentric">concentric</option>
+      <option value="breadthfirst">breadthfirst</option>
+      <option value="circle">circle</option>
+      <option value="grid">grid</option>
+    </select>
+  </label>
+  <button type="submit">Load graph</button>
+</form>
+
+<section class="graph-shell">
+  <div class="graph-canvas-wrap">
+    <div id="graph-canvas" class="graph-canvas" role="img" aria-label="Knowledge graph"></div>
+    <div id="graph-empty" class="graph-empty">Load graph to inspect relationships.</div>
+  </div>
+  <aside class="graph-detail">
+    <h2 id="graph-detail-title">No node selected</h2>
+    <p id="graph-detail-meta">Select a node or relationship.</p>
+    <button id="graph-expand" class="graph-secondary-action" type="button" disabled>Expand 1-hop</button>
+    <h3>Neighbors</h3>
+    <ul id="graph-neighbors" class="graph-neighbor-list"></ul>
+    <h3>Metadata</h3>
+    <pre id="graph-detail-properties">{}</pre>
+  </aside>
+</section>
+
+<p id="graph-status" class="graph-status" role="status"></p>
+
+<script src="/static/vendor/cytoscape.min.js"></script>
+<script>
+  const form = document.getElementById("graph-form");
+  const canvas = document.getElementById("graph-canvas");
+  const empty = document.getElementById("graph-empty");
+  const status = document.getElementById("graph-status");
+  const detailTitle = document.getElementById("graph-detail-title");
+  const detailMeta = document.getElementById("graph-detail-meta");
+  const detailProperties = document.getElementById("graph-detail-properties");
+  const labelSelect = document.getElementById("entity-label-select");
+  const layoutSelect = document.getElementById("graph-layout-select");
+  const searchInput = document.getElementById("graph-search");
+  const typeFilter = document.getElementById("graph-node-type-filter");
+  const expandButton = document.getElementById("graph-expand");
+  const neighborsList = document.getElementById("graph-neighbors");
+  let cy = null;
+  let selectedNodeId = "";
+  let currentGraph = null;
+
+  const nodeTypeColors = {
+    document: "#4B7BEC",
+    note: "#45AAF2",
+    section: "#2D98DA",
+    chunk: "#A5B1C2",
+    concept: "#20BF6B",
+    entity: "#26DE81",
+    method: "#8854D0",
+    evidence_type: "#FA8231",
+    process: "#F7B731",
+    risk: "#EB3B5A",
+    limitation: "#FC5C65",
+    interpretation: "#A55EEA",
+    table: "#778CA3",
+    image: "#FD9644",
+    equation: "#FED330",
+  };
+
+  function graphElements(graph) {
+    return [
+      ...(graph.nodes || []).map((node) => ({
+        data: {
+          id: node.id,
+          label: node.label || node.id,
+          type: node.type || "entity",
+          graphType: node.graph_type || "concept_graph",
+          degree: node.degree || 0,
+          sourceCount: node.source_count || 0,
+          metadata: node.metadata || {},
+        },
+      })),
+      ...(graph.edges || []).map((edge) => ({
+        data: {
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          label: edge.label || edge.type || "related_to",
+          type: edge.type || "related_to",
+          direction: edge.direction || "directed",
+          metadata: edge.metadata || {},
+        },
+      })),
+    ];
+  }
+
+  function runLayout() {
+    if (!cy) return;
+    cy.layout({
+      name: layoutSelect.value,
+      animate: true,
+      fit: true,
+      padding: 36,
+      nodeDimensionsIncludeLabels: true,
+    }).run();
+  }
+
+  function drawGraph(graph) {
+    currentGraph = graph;
+    empty.hidden = (graph.nodes || []).length > 0;
+    selectedNodeId = "";
+    expandButton.disabled = true;
+    neighborsList.innerHTML = "";
+
+    if (!(graph.nodes || []).length) {
+      if (cy) cy.destroy();
+      cy = null;
+      status.textContent = (graph.warnings || ["No graph nodes found for this label."]).join(" ");
+      return;
+    }
+
+    cy = cytoscape({
+      container: canvas,
+      elements: graphElements(graph),
+      style: [
+        {
+          selector: "node",
+          style: {
+            "background-color": (element) => nodeTypeColors[element.data("type")] || nodeTypeColors.entity,
+            "border-color": "#2b3440",
+            "border-opacity": 0.28,
+            "border-width": 1,
+            "color": "#2b3440",
+            "font-size": 11,
+            "font-weight": 700,
+            "height": (element) => Math.min(64, 18 + Math.log1p(element.data("degree") + element.data("sourceCount")) * 16),
+            "label": "data(label)",
+            "text-background-color": "#fbfcfd",
+            "text-background-opacity": 0.82,
+            "text-background-padding": 2,
+            "text-max-width": 120,
+            "text-valign": "bottom",
+            "text-wrap": "wrap",
+            "width": (element) => Math.min(64, 18 + Math.log1p(element.data("degree") + element.data("sourceCount")) * 16),
+          },
+        },
+        {
+          selector: "edge",
+          style: {
+            "curve-style": "bezier",
+            "line-color": "#9aa6b2",
+            "target-arrow-color": "#9aa6b2",
+            "target-arrow-shape": "triangle",
+            "label": "data(label)",
+            "font-size": 9,
+            "text-background-color": "#fbfcfd",
+            "text-background-opacity": 0.88,
+            "text-background-padding": 2,
+            "width": 1.4,
+          },
+        },
+        {
+          selector: ".faded",
+          style: { opacity: 0.16, "text-opacity": 0.05 },
+        },
+        {
+          selector: ".highlighted",
+          style: { opacity: 1, "border-width": 3, "line-color": "#19a887", "target-arrow-color": "#19a887" },
+        },
+      ],
+    });
+
+    cy.on("tap", "node", (event) => selectNode(event.target));
+    cy.on("tap", "edge", (event) => selectEdge(event.target));
+    cy.on("tap", (event) => {
+      if (event.target === cy) clearSelection();
+    });
+
+    populateTypeFilter(graph.nodes || []);
+    runLayout();
+    applyFilters();
+    status.textContent = `${graph.stats.node_count} nodes, ${graph.stats.edge_count} relationships. ${(graph.warnings || []).join(" ")}`.trim();
+  }
+
+  function populateTypeFilter(nodes) {
+    const selected = typeFilter.value;
+    const types = Array.from(new Set(nodes.map((node) => node.type || "entity"))).sort();
+    typeFilter.innerHTML = '<option value="">All types</option>' + types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+    typeFilter.value = types.includes(selected) ? selected : "";
+  }
+
+  function selectNode(node) {
+    selectedNodeId = node.id();
+    const neighbors = node.closedNeighborhood();
+    cy.elements().addClass("faded").removeClass("highlighted");
+    neighbors.removeClass("faded").addClass("highlighted");
+    const neighborNodes = node.neighborhood("node").map((neighbor) => neighbor.data("label"));
+    detailTitle.textContent = node.data("label");
+    detailMeta.textContent = `${node.data("type")} | degree ${node.degree()}`;
+    detailProperties.textContent = JSON.stringify(node.data("metadata") || {}, null, 2);
+    neighborsList.innerHTML = neighborNodes.length ? neighborNodes.map((label) => `<li>${escapeHtml(label)}</li>`).join("") : "<li>No neighbors loaded</li>";
+    expandButton.disabled = false;
+  }
+
+  function selectEdge(edge) {
+    selectedNodeId = "";
+    expandButton.disabled = true;
+    cy.elements().addClass("faded").removeClass("highlighted");
+    edge.connectedNodes().add(edge).removeClass("faded").addClass("highlighted");
+    detailTitle.textContent = edge.data("label");
+    detailMeta.textContent = `${edge.source().data("label")} -> ${edge.target().data("label")}`;
+    detailProperties.textContent = JSON.stringify(edge.data("metadata") || {}, null, 2);
+    neighborsList.innerHTML = "";
+  }
+
+  function clearSelection() {
+    selectedNodeId = "";
+    expandButton.disabled = true;
+    if (cy) cy.elements().removeClass("faded highlighted");
+    detailTitle.textContent = "No node selected";
+    detailMeta.textContent = "Select a node or relationship.";
+    detailProperties.textContent = "{}";
+    neighborsList.innerHTML = "";
+  }
+
+  function applyFilters() {
+    if (!cy) return;
+    const query = searchInput.value.trim().toLowerCase();
+    const type = typeFilter.value;
+    cy.elements().removeClass("faded");
+    cy.nodes().forEach((node) => {
+      const label = String(node.data("label") || "").toLowerCase();
+      if ((query && !label.includes(query)) || (type && node.data("type") !== type)) {
+        node.addClass("faded");
+      }
+    });
+    cy.edges().forEach((edge) => {
+      if (edge.source().hasClass("faded") || edge.target().hasClass("faded")) edge.addClass("faded");
+    });
+  }
+
+  async function loadGraph(labelOverride = "") {
+    const params = new URLSearchParams(new FormData(form));
+    if (labelOverride) params.set("label", labelOverride);
+    status.textContent = "Loading graph...";
+    empty.hidden = false;
+    try {
+      const response = await fetch(`/api/knowledge-graph?${params.toString()}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Graph request failed.");
+      drawGraph(payload);
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await loadGraph();
+  });
+  layoutSelect.addEventListener("change", runLayout);
+  searchInput.addEventListener("input", applyFilters);
+  typeFilter.addEventListener("change", applyFilters);
+  expandButton.addEventListener("click", () => {
+    if (selectedNodeId) {
+      labelSelect.value = selectedNodeId;
+      loadGraph(selectedNodeId);
+    }
+  });
+
+  async function loadEntityLabels() {
+    try {
+      const response = await fetch("/api/knowledge-graph/labels");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Could not load graph labels.");
+      const labels = payload.labels || [];
+      labelSelect.innerHTML = labels.map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`).join("");
+      if (labels.length) {
+        labelSelect.value = labels[0];
+        status.textContent = `${labels.length} entity labels available.`;
+      } else {
+        status.textContent = "No graph entities extracted. Check LLM settings and reindex.";
+      }
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  loadEntityLabels();
+</script>
+{% endblock %}

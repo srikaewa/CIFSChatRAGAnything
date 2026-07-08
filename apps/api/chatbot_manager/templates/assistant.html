@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head"><h1>Assistant</h1><p>Set the voice, fallback reply, and LLM connection.</p></section>
+<form class="panel form-grid" method="post" action="/assistant">
+  <label class="wide">System prompt <textarea name="system_prompt" rows="6">{{ settings.system_prompt }}</textarea></label>
+  <label class="wide">Fallback reply <textarea name="fallback_reply" rows="3">{{ settings.fallback_reply }}</textarea></label>
+  <label><input type="checkbox" name="rag_enabled" {{ "checked" if settings.rag_enabled else "" }}> Use RAG-Anything fallback</label>
+  <label class="wide">LLM base URL <input name="llm_base_url" value="{{ settings.llm_base_url }}" required></label>
+  <label class="wide">LLM API key <input name="llm_api_key" type="password" placeholder="{{ masked_llm_api_key or 'Leave blank to keep current key' }}"></label>
+  <label>LLM model <input name="llm_model" value="{{ settings.llm_model }}"></label>
+  <label>Vision model <input name="vision_model" value="{{ settings.vision_model }}"></label>
+  <label>Embedding model <input name="embedding_model" value="{{ settings.embedding_model }}"></label>
+  <button type="submit">Save assistant</button>
+</form>
+{% endblock %}

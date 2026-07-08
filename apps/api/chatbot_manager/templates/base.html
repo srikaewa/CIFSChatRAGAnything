@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title or "Chatbot Manager" }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">Chatbot Manager</div>
+      <nav>
+        <a href="/" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+        <a href="/channels" class="{{ 'active' if active_page == 'channels' else '' }}">Channels</a>
+        <a href="/rules" class="{{ 'active' if active_page == 'rules' else '' }}">Rules</a>
+        <a href="/knowledge" class="{{ 'active' if active_page == 'knowledge' else '' }}">Knowledge</a>
+        <a href="/knowledge-graph" class="{{ 'active' if active_page == 'knowledge_graph' else '' }}">Graph</a>
+        <a href="/assistant" class="{{ 'active' if active_page == 'assistant' else '' }}">Assistant</a>
+        <a href="/test-chat" class="{{ 'active' if active_page == 'test_chat' else '' }}">Test Chat</a>
+        <a href="/logs" class="{{ 'active' if active_page == 'logs' else '' }}">Logs</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <span>{{ admin_email or "" }}</span>
+        <form method="post" action="/logout"><button type="submit">Log out</button></form>
+      </header>
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

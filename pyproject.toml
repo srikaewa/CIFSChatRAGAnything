@@ -1,0 +1,29 @@
+[project]
+name = "cifs-chatbot-manager"
+version = "0.1.0"
+description = "Local admin manager for LINE and Facebook Messenger chatbots with RAG-Anything."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "sqlmodel>=0.0.22",
+  "jinja2>=3.1.4",
+  "python-multipart>=0.0.9",
+  "httpx>=0.27.0",
+  "itsdangerous>=2.2.0",
+  "pwdlib[argon2]>=0.2.1",
+  "pydantic-settings>=2.4.0",
+  "raganything>=1.0.0"
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+  "respx>=0.21.1"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["apps/api"]

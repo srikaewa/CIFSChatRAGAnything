@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head"><h1>Rules</h1><p>Rules answer predictable questions before RAG runs.</p></section>
+<form class="panel form-grid" method="post" action="/rules">
+  <label>Keyword <input name="pattern" required></label>
+  <label>Match <select name="match_type"><option value="contains">Contains</option><option value="exact">Exact</option></select></label>
+  <label>Priority <input name="priority" type="number" value="100"></label>
+  <label class="wide">Reply <textarea name="reply_text" required></textarea></label>
+  <button type="submit">Add rule</button>
+</form>
+<table class="data-table">
+  <thead><tr><th>Priority</th><th>Match</th><th>Keyword</th><th>Reply</th></tr></thead>
+  <tbody>
+    {% for rule in rules %}
+    <tr><td>{{ rule.priority }}</td><td>{{ rule.match_type }}</td><td>{{ rule.pattern }}</td><td>{{ rule.reply_text }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

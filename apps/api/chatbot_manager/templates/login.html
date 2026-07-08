@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login - Chatbot Manager</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body class="login-body">
+    <form class="login-panel" method="post" action="/login">
+      <h1>Chatbot Manager</h1>
+      <label>Email <input name="email" type="email" value="admin@example.local" required></label>
+      <label>Password <input name="password" type="password" required></label>
+      {% if error %}<p class="error">{{ error }}</p>{% endif %}
+      <button type="submit">Log in</button>
+    </form>
+  </body>
+</html>

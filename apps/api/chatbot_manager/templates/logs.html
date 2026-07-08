@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head"><h1>Logs</h1><p>Recent messages and how the bot answered.</p></section>
+<table class="data-table">
+  <thead><tr><th>Time</th><th>Provider</th><th>Message</th><th>Source</th><th>Reply</th></tr></thead>
+  <tbody>
+    {% for event in events %}
+    <tr>
+      <td>{{ event.created_at }}</td>
+      <td>{{ event.provider }}</td>
+      <td>{{ event.incoming_text }}</td>
+      <td>{{ event.decision_source }}</td>
+      <td>{{ event.reply_text }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
