@@ -15,7 +15,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]
         "TELEGRAM_BOT_TOKEN",
         "LLM_API_KEY",
     ):
-        monkeypatch.delenv(variable, raising=False)
+        monkeypatch.setenv(variable, "")
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("DATABASE_URL", "sqlite://")

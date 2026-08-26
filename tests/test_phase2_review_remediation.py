@@ -295,3 +295,16 @@ def test_each_admin_post_form_has_its_own_csrf_token(client: TestClient) -> None
                 form,
                 flags=re.IGNORECASE,
             ), f"POST form without a non-empty CSRF token on {path}"
+
+
+def test_client_fixture_overrides_host_and_dotenv_credentials(client: TestClient) -> None:
+    from chatbot_manager.settings import get_settings
+
+    settings = get_settings()
+    assert settings.line_channel_secret == ""
+    assert settings.line_channel_access_token == ""
+    assert settings.messenger_verify_token == ""
+    assert settings.messenger_page_access_token == ""
+    assert settings.messenger_app_secret == ""
+    assert settings.telegram_bot_token == ""
+    assert settings.llm_api_key == ""
