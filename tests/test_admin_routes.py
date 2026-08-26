@@ -11,13 +11,17 @@ from chatbot_manager.models import AssistantSettings, Channel, KnowledgeDocument
 from chatbot_manager.settings import get_settings
 
 
-def login(client: TestClient) -> None:
+def login(client: TestClient) -> str:
     response = client.post(
         "/login",
         data={"email": "admin@example.local", "password": "admin1234!"},
         follow_redirects=False,
     )
     assert response.status_code == 303
+    page = client.get("/")
+    marker = 'name="csrf_token" value="'
+    assert marker in page.text
+    return page.text.split(marker, 1)[1].split('"', 1)[0]
 
 
 def test_dashboard_redirects_to_login(client: TestClient) -> None:
@@ -49,11 +53,11 @@ def test_login_rejects_bad_password(client: TestClient) -> None:
 
 
 def test_rule_create_and_list(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
 
     created = client.post(
         "/rules",
-        data={"pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
+        data={"csrf_token": csrf_token, "pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
         follow_redirects=False,
     )
 
@@ -64,11 +68,12 @@ def test_rule_create_and_list(client: TestClient) -> None:
 
 
 def test_assistant_settings_update(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
 
     response = client.post(
         "/assistant",
         data={
+            "csrf_token": csrf_token,
             "system_prompt": "Use shop docs.",
             "fallback_reply": "Ask staff.",
             "rag_enabled": "on",
@@ -101,14 +106,14 @@ def test_rag_service_from_assistant_uses_env_api_key_when_assistant_key_empty(mo
 
 
 def test_test_chat_uses_rule_and_logs_event(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
     client.post(
         "/rules",
-        data={"pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
+        data={"csrf_token": csrf_token, "pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
         follow_redirects=False,
     )
 
-    response = client.post("/test-chat", data={"message": "what price"}, follow_redirects=False)
+    response = client.post("/test-chat", data={"csrf_token": csrf_token, "message": "what price"}, follow_redirects=False)
 
     assert response.status_code == 200
     assert "Price is 100." in response.text
@@ -133,10 +138,11 @@ def test_knowledge_upload_records_document(client: TestClient, monkeypatch) -> N
         return None
 
     monkeypatch.setattr("chatbot_manager.admin.routes.index_document_task", fake_index)
-    login(client)
+    csrf_token = login(client)
 
     response = client.post(
         "/knowledge",
+        data={"csrf_token": csrf_token},
         files=[("files", ("menu.txt", b"Menu content", "text/plain"))],
         follow_redirects=False,
     )
@@ -151,9 +157,10 @@ def test_knowledge_status_api_returns_documents(client: TestClient, monkeypatch)
         return None
 
     monkeypatch.setattr("chatbot_manager.admin.routes.index_document_task", fake_index)
-    login(client)
+    csrf_token = login(client)
     client.post(
         "/knowledge",
+        data={"csrf_token": csrf_token},
         files=[("files", ("menu.txt", b"Menu content", "text/plain"))],
         follow_redirects=False,
     )
@@ -173,14 +180,19 @@ def test_knowledge_document_can_be_reindexed(client: TestClient, monkeypatch) ->
         queued.append((document_id, path, reindex))
 
     monkeypatch.setattr("chatbot_manager.admin.routes.index_document_task", fake_index)
-    login(client)
+    csrf_token = login(client)
     client.post(
         "/knowledge",
+        data={"csrf_token": csrf_token},
         files=[("files", ("menu.txt", b"Menu content", "text/plain"))],
         follow_redirects=False,
     )
 
-    response = client.post("/knowledge/1/reindex", follow_redirects=False)
+    response = client.post(
+        "/knowledge/1/reindex",
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
+    )
 
     assert response.status_code == 303
     assert response.headers["location"] == "/knowledge"
@@ -241,10 +253,11 @@ async def test_index_document_task_uses_reindex_mode(client: TestClient, monkeyp
 
 
 def test_knowledge_upload_skips_unsupported_file_type(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
 
     response = client.post(
         "/knowledge",
+        data={"csrf_token": csrf_token},
         files=[("files", ("script.exe", b"bad", "application/octet-stream"))],
         follow_redirects=False,
     )
@@ -427,11 +440,12 @@ def test_channels_page_shows_webhook_urls(client: TestClient) -> None:
 
 
 def test_channel_config_can_be_saved_and_masked(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
 
     response = client.post(
         "/channels/line",
         data={
+            "csrf_token": csrf_token,
             "enabled": "on",
             "channel_secret": "line-secret-123456",
             "channel_access_token": "line-token-654321",
@@ -458,10 +472,11 @@ def test_channel_config_can_be_saved_and_masked(client: TestClient) -> None:
 
 
 def test_channel_config_blank_secret_keeps_existing_value(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
     client.post(
         "/channels/line",
         data={
+            "csrf_token": csrf_token,
             "enabled": "on",
             "channel_secret": "line-secret",
             "channel_access_token": "line-token",
@@ -472,6 +487,7 @@ def test_channel_config_blank_secret_keeps_existing_value(client: TestClient) ->
     response = client.post(
         "/channels/line",
         data={
+            "csrf_token": csrf_token,
             "enabled": "on",
             "channel_secret": "",
             "channel_access_token": "new-line-token",
@@ -490,10 +506,10 @@ def test_channel_config_blank_secret_keeps_existing_value(client: TestClient) ->
 
 
 def test_dashboard_uses_saved_channel_config_state(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
     client.post(
         "/channels/line",
-        data={"enabled": "on", "channel_secret": "line-secret", "channel_access_token": "line-token"},
+        data={"csrf_token": csrf_token, "enabled": "on", "channel_secret": "line-secret", "channel_access_token": "line-token"},
         follow_redirects=False,
     )
 

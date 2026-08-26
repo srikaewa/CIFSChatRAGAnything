@@ -21,13 +21,17 @@ def messenger_signature(body: bytes, secret: str) -> str:
 
 
 
-def login(client: TestClient) -> None:
+def login(client: TestClient) -> str:
     response = client.post(
         "/login",
         data={"email": "admin@example.local", "password": "admin1234!"},
         follow_redirects=False,
     )
     assert response.status_code == 303
+    page = client.get("/")
+    marker = 'name="csrf_token" value="'
+    assert marker in page.text
+    return page.text.split(marker, 1)[1].split('"', 1)[0]
 
 
 def test_messenger_verification(client: TestClient) -> None:
@@ -112,7 +116,7 @@ def test_messenger_webhook_accepts_empty_entries(client: TestClient) -> None:
 
 @respx.mock
 def test_line_webhook_processes_text_rule_and_logs(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
     with Session(get_engine()) as session:
         session.add(
             Channel(
@@ -125,7 +129,7 @@ def test_line_webhook_processes_text_rule_and_logs(client: TestClient) -> None:
         session.commit()
     client.post(
         "/rules",
-        data={"pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
+        data={"csrf_token": csrf_token, "pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
         follow_redirects=False,
     )
     route = respx.post("https://api.line.me/v2/bot/message/reply").mock(return_value=Response(200, json={}))
@@ -158,10 +162,10 @@ def test_line_webhook_uses_saved_channel_credentials(client: TestClient) -> None
             )
         )
         session.commit()
-    login(client)
+    csrf_token = login(client)
     client.post(
         "/rules",
-        data={"pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
+        data={"csrf_token": csrf_token, "pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
         follow_redirects=False,
     )
     route = respx.post("https://api.line.me/v2/bot/message/reply").mock(return_value=Response(200, json={}))

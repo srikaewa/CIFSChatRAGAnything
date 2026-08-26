@@ -1,3 +1,4 @@
+import hmac
 from itsdangerous import BadSignature, URLSafeSerializer
 
 from .settings import get_settings
@@ -22,6 +23,23 @@ def read_session_token(token: str | None) -> str | None:
     except BadSignature:
         return None
     return str(data.get("email", ""))
+
+
+def make_csrf_token(email: str) -> str:
+    serializer = URLSafeSerializer(get_settings().app_secret_key, salt="admin-csrf")
+    return serializer.dumps({"email": email})
+
+
+def verify_csrf_token(token: str, email: str) -> bool:
+    if not token or not email:
+        return False
+    serializer = URLSafeSerializer(get_settings().app_secret_key, salt="admin-csrf")
+    try:
+        data = serializer.loads(token)
+    except BadSignature:
+        return False
+    token_email = str(data.get("email", ""))
+    return bool(token_email) and hmac.compare_digest(token_email, email)
 
 
 def mask_secret(value: str) -> str:

@@ -13,10 +13,11 @@ from chatbot_manager.db import get_session
 from chatbot_manager.models import AssistantSettings, ChatEvent, KnowledgeDocument, Rule, utc_now
 from chatbot_manager.channels.telegram import TelegramAdapter
 from chatbot_manager.rag.service import rag_service_from_assistant
-from chatbot_manager.security import make_session_token, mask_secret, read_session_token, verify_admin
+from chatbot_manager.security import make_csrf_token, make_session_token, mask_secret, read_session_token, verify_admin, verify_csrf_token
 from chatbot_manager.settings import get_settings
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
+templates.env.globals["csrf_token_for"] = make_csrf_token
 router = APIRouter()
 SUPPORTED_KNOWLEDGE_EXTENSIONS = {
     ".bmp",
@@ -64,6 +65,15 @@ def require_admin(request: Request) -> str:
     return email
 
 
+def require_csrf(
+    csrf_token: str = Form(""),
+    admin_email: str = Depends(require_admin),
+) -> str:
+    if not verify_csrf_token(csrf_token, admin_email):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    return admin_email
+
+
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request) -> Response:
     return templates.TemplateResponse(request, "login.html", {"error": ""})
@@ -79,7 +89,7 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
 
 
 @router.post("/logout")
-def logout() -> Response:
+def logout(admin_email: str = Depends(require_csrf)) -> Response:
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie("admin_session")
     return response
@@ -142,7 +152,7 @@ def update_channel(
     app_secret: str = Form(""),
     bot_token: str = Form(""),
     webhook_secret: str = Form(""),
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     if provider not in CHANNEL_DEFINITIONS:
@@ -170,7 +180,7 @@ def update_channel(
 @router.post("/channels/telegram/setup-webhook")
 async def telegram_setup_webhook(
     request: Request,
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     settings = get_settings()
@@ -219,7 +229,7 @@ async def telegram_setup_webhook(
 @router.post("/channels/telegram/disable-webhook")
 async def telegram_disable_webhook(
     request: Request,
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     settings = get_settings()
@@ -391,7 +401,7 @@ def create_rule(
     priority: int = Form(100),
     escalate: str | None = Form(None),
     escalate_message: str = Form(""),
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     session.add(Rule(
@@ -420,7 +430,7 @@ def update_rule(
     priority: int = Form(100),
     escalate: str | None = Form(None),
     escalate_message: str = Form(""),
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     rule = session.get(Rule, rule_id)
@@ -443,7 +453,7 @@ def update_rule(
 @router.post("/rules/{rule_id}/delete")
 def delete_rule(
     rule_id: int,
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     rule = session.get(Rule, rule_id)
@@ -488,7 +498,7 @@ def update_assistant(
     embedding_model: str = Form(...),
     admin_notify_channel: str = Form("telegram"),
     admin_notify_chat_id: str = Form(""),
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     settings = assistant_settings(session)
@@ -522,7 +532,7 @@ def test_chat_page(request: Request, admin_email: str = Depends(require_admin)) 
 async def test_chat_submit(
     request: Request,
     message: str = Form(...),
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     rules = session.exec(select(Rule).order_by(Rule.priority)).all()
@@ -692,7 +702,7 @@ async def knowledge_graph_labels_api(
 async def upload_knowledge(
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     settings = get_settings()
@@ -724,7 +734,7 @@ async def upload_knowledge(
 def reindex_knowledge(
     document_id: int,
     background_tasks: BackgroundTasks,
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     document = session.get(KnowledgeDocument, document_id)
@@ -745,7 +755,7 @@ def reindex_knowledge(
 @router.post("/knowledge/{document_id}/delete")
 async def delete_knowledge(
     document_id: int,
-    admin_email: str = Depends(require_admin),
+    admin_email: str = Depends(require_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     document = session.get(KnowledgeDocument, document_id)

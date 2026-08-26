@@ -23,7 +23,10 @@
     <main class="main">
       <header class="topbar">
         <span>{{ admin_email or "" }}</span>
-        <form method="post" action="/logout"><button type="submit">Log out</button></form>
+        <form method="post" action="/logout">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+          <button type="submit">Log out</button>
+        </form>
       </header>
       {% block content %}{% endblock %}
     </main>

@@ -10,13 +10,17 @@ from chatbot_manager.db import get_engine
 from chatbot_manager.models import Channel
 
 
-def login(client: TestClient) -> None:
+def login(client: TestClient) -> str:
     response = client.post(
         "/login",
         data={"email": "admin@example.local", "password": "admin1234!"},
         follow_redirects=False,
     )
     assert response.status_code == 303
+    page = client.get("/")
+    marker = 'name="csrf_token" value="'
+    assert marker in page.text
+    return page.text.split(marker, 1)[1].split('"', 1)[0]
 
 
 def test_telegram_webhook_rejects_bad_secret(client: TestClient) -> None:
@@ -95,10 +99,10 @@ def test_telegram_webhook_accepts_without_secret(client: TestClient) -> None:
 
 @respx.mock
 def test_telegram_webhook_processes_text_rule_and_logs(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
     client.post(
         "/rules",
-        data={"pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
+        data={"csrf_token": csrf_token, "pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
         follow_redirects=False,
     )
     route = respx.post(f"{TELEGRAM_API}token/sendMessage").mock(return_value=Response(200, json={"ok": True}))
@@ -138,11 +142,12 @@ def test_telegram_webhook_processes_text_rule_and_logs(client: TestClient) -> No
 
 
 def test_telegram_channel_config_can_be_saved(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
 
     response = client.post(
         "/channels/telegram",
         data={
+            "csrf_token": csrf_token,
             "enabled": "on",
             "bot_token": "tg-bot-token-123",
             "webhook_secret": "tg-secret-456",
@@ -168,16 +173,16 @@ def test_telegram_channel_config_can_be_saved(client: TestClient) -> None:
 
 
 def test_telegram_channel_config_blank_keeps_existing(client: TestClient) -> None:
-    login(client)
+    csrf_token = login(client)
     client.post(
         "/channels/telegram",
-        data={"enabled": "on", "bot_token": "tg-bot-token", "webhook_secret": "tg-secret"},
+        data={"csrf_token": csrf_token, "enabled": "on", "bot_token": "tg-bot-token", "webhook_secret": "tg-secret"},
         follow_redirects=False,
     )
 
     response = client.post(
         "/channels/telegram",
-        data={"enabled": "on", "bot_token": "", "webhook_secret": ""},
+        data={"csrf_token": csrf_token, "enabled": "on", "bot_token": "", "webhook_secret": ""},
         follow_redirects=False,
     )
 

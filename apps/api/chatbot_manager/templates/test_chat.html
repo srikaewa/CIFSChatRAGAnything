@@ -2,6 +2,7 @@
 {% block content %}
 <section class="page-head"><h1>Test Chat</h1><p>Try a user message before connecting live channels.</p></section>
 <form class="panel form-grid" method="post" action="/test-chat">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
   <label class="wide">User message <textarea name="message" rows="3">{{ message }}</textarea></label>
   <button type="submit">Send test</button>
 </form>

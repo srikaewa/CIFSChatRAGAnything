@@ -6,6 +6,7 @@
 </section>
 
 <form class="panel form-grid" method="post" action="/knowledge" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
   <label class="wide">Upload documents <input type="file" name="files" multiple required></label>
   <button type="submit">Upload index</button>
 </form>
@@ -21,9 +22,11 @@
       <td data-field="error">{{ document.error }}</td>
       <td class="actions">
         <form method="post" action="/knowledge/{{ document.id }}/reindex" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
           <button class="action-btn">Reindex</button>
         </form>
         <form method="post" action="/knowledge/{{ document.id }}/delete" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
           <button class="action-btn danger" onclick="return confirm('Delete this document and its indexed data?')">Delete</button>
         </form>
       </td>
@@ -47,9 +50,11 @@
         <td data-field="error">${escapeHtml(document.error || "")}</td>
         <td class="actions">
           <form method="post" action="/knowledge/${document.id}/reindex" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
             <button class="action-btn">Reindex</button>
           </form>
           <form method="post" action="/knowledge/${document.id}/delete" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
             <button class="action-btn danger" onclick="return confirm('Delete this document and its indexed data?')">Delete</button>
           </form>
         </td>

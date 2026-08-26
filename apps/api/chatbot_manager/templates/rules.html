@@ -4,6 +4,7 @@
 
 {% set form_action = "/rules/" ~ editing_rule.id ~ "/update" if editing_rule else "/rules" %}
 <form class="panel form-grid" method="post" action="{{ form_action }}" id="rule-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
   <div class="wide conditions-section">
     <label class="cond-label">Conditions</label>
     <div class="condition-logic-toggle">
@@ -123,6 +124,7 @@ function removeCondition(btn) {
       <td class="actions">
         <a href="/rules?edit={{ rule.id }}" class="action-btn">Edit</a>
         <form method="post" action="/rules/{{ rule.id }}/delete" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
           <button class="action-btn danger" onclick="return confirm('Delete this rule?')">Delete</button>
         </form>
       </td>

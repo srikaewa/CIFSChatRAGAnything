@@ -2,6 +2,7 @@
 {% block content %}
 <section class="page-head"><h1>Assistant</h1><p>Set the voice, fallback reply, and LLM connection.</p></section>
 <form class="panel form-grid" method="post" action="/assistant">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
   <label class="wide">System prompt <textarea name="system_prompt" rows="6">{{ settings.system_prompt }}</textarea></label>
   <label class="wide">Fallback reply <textarea name="fallback_reply" rows="3">{{ settings.fallback_reply }}</textarea></label>
   <label class="checkbox-label"><input type="checkbox" name="rag_enabled" {{ "checked" if settings.rag_enabled else "" }}> Use RAG-Anything fallback</label>
