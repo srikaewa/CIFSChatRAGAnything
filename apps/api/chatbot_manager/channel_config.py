@@ -17,6 +17,14 @@ class ChannelDefinition:
     required_fields: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class ResolvedChannel:
+    provider: str
+    enabled: bool
+    configured: bool
+    credentials: dict[str, str]
+
+
 CHANNEL_DEFINITIONS: dict[str, ChannelDefinition] = {
     "line": ChannelDefinition(
         provider="line",
@@ -28,13 +36,13 @@ CHANNEL_DEFINITIONS: dict[str, ChannelDefinition] = {
         provider="messenger",
         display_name="Messenger",
         fields=("verify_token", "page_access_token", "app_secret"),
-        required_fields=("verify_token", "page_access_token"),
+        required_fields=("verify_token", "page_access_token", "app_secret"),
     ),
     "telegram": ChannelDefinition(
         provider="telegram",
         display_name="Telegram",
         fields=("bot_token", "webhook_secret"),
-        required_fields=("bot_token",),
+        required_fields=("bot_token", "webhook_secret"),
     ),
 }
 
@@ -92,6 +100,18 @@ def channel_credentials(session: Session, settings: Settings, provider: str) -> 
     return credentials
 
 
+def resolve_channel(session: Session, settings: Settings, provider: str) -> ResolvedChannel:
+    definition = CHANNEL_DEFINITIONS[provider]
+    saved = get_channel(session, provider)
+    credentials = channel_credentials(session, settings, provider)
+    return ResolvedChannel(
+        provider=provider,
+        enabled=saved.enabled if saved is not None else True,
+        configured=is_configured(credentials, definition.required_fields),
+        credentials=credentials,
+    )
+
+
 def save_channel(
     session: Session,
     provider: str,
@@ -143,16 +163,18 @@ def is_configured(credentials: dict[str, str], required_fields: tuple[str, ...])
 def channel_cards(session: Session, settings: Settings) -> list[dict[str, Any]]:
     cards: list[dict[str, Any]] = []
     for definition in CHANNEL_DEFINITIONS.values():
-        saved = get_channel(session, definition.provider)
-        credentials = channel_credentials(session, settings, definition.provider)
+        resolved = resolve_channel(session, settings, definition.provider)
         cards.append(
             {
                 "provider": definition.provider,
                 "display_name": definition.display_name,
-                "enabled": saved.enabled if saved is not None else True,
-                "configured": is_configured(credentials, definition.required_fields),
-                "credentials": credentials,
-                "masked": {field: mask_secret(credentials.get(field, "")) for field in definition.fields},
+                "enabled": resolved.enabled,
+                "configured": resolved.configured,
+                "webhook_url": resolved.credentials.get("webhook_url", ""),
+                "masked": {
+                    field: mask_secret(resolved.credentials.get(field, ""))
+                    for field in definition.fields
+                },
             }
         )
     return cards

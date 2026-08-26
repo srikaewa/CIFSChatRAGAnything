@@ -6,6 +6,16 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
+    for variable in (
+        "LINE_CHANNEL_SECRET",
+        "LINE_CHANNEL_ACCESS_TOKEN",
+        "MESSENGER_VERIFY_TOKEN",
+        "MESSENGER_PAGE_ACCESS_TOKEN",
+        "MESSENGER_APP_SECRET",
+        "TELEGRAM_BOT_TOKEN",
+        "LLM_API_KEY",
+    ):
+        monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("DATABASE_URL", "sqlite://")

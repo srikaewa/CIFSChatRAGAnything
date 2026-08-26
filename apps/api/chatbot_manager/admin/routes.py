@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from chatbot_manager.channel_config import CHANNEL_DEFINITIONS, channel_cards, channel_credentials, get_channel, save_channel, update_channel_credentials
-from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput
+from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput, RESPONSE_GENERATION_FAILED_MESSAGE
 from chatbot_manager.db import get_session
 from chatbot_manager.models import AssistantSettings, ChatEvent, KnowledgeDocument, Rule, utc_now
 from chatbot_manager.channels.telegram import TelegramAdapter
@@ -164,7 +164,7 @@ def channels_page(
             "active_page": "channels",
             "channel_cards": cards,
             "webhook_urls": {c["provider"]: f"{base_url}/webhooks/{c['provider']}" for c in cards},
-            "telegram_webhook_active": telegram_card.get("credentials", {}).get("webhook_url", ""),
+            "telegram_webhook_active": telegram_card.get("webhook_url", ""),
             "saved": saved == "1",
             "error": {
                 "channel_save_failed": "Could not save channel settings. Check the configuration and retry.",
@@ -223,6 +223,8 @@ async def telegram_setup_webhook(
     credentials = channel_credentials(session, settings, "telegram")
     if not credentials.get("bot_token"):
         return RedirectResponse("/channels?error=Telegram+bot+token+is+not+configured", status_code=303)
+    if not credentials.get("webhook_secret"):
+        return RedirectResponse("/channels?error=Telegram+webhook+secret+is+not+configured", status_code=303)
     adapter = TelegramAdapter(credentials["bot_token"], credentials["webhook_secret"])
     import subprocess, json
     try:
@@ -598,7 +600,7 @@ async def test_chat_submit(
             "message": message,
             "reply": decision.reply_text,
             "source": decision.source,
-            "error": decision.error,
+            "error": RESPONSE_GENERATION_FAILED_MESSAGE if decision.error else "",
         },
     )
 
@@ -637,7 +639,12 @@ async def index_document_task(document_id: int, path: str, reindex: bool = False
             document.indexed_at = utc_now()
         except Exception as exc:
             document.status = "failed"
-            document.error = str(exc)
+            logger.error(
+                "Knowledge indexing failed document_id=%s error_type=%s",
+                document.id,
+                type(exc).__name__,
+            )
+            document.error = "Knowledge indexing failed. Retry indexing."
         document.updated_at = utc_now()
         session.add(document)
         session.commit()

@@ -7,11 +7,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 from sqlmodel import Session, select
 
-from chatbot_manager.channel_config import channel_credentials
+from chatbot_manager.channel_config import channel_credentials, resolve_channel
 from chatbot_manager.channels.line import IncomingMessage, LineAdapter
 from chatbot_manager.channels.messenger import MessengerAdapter
 from chatbot_manager.channels.telegram import TelegramAdapter
-from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput
+from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput, RESPONSE_GENERATION_FAILED
 from chatbot_manager.db import get_session
 from chatbot_manager.models import AssistantSettings, ChatEvent, Rule
 from chatbot_manager.rag.service import rag_service_from_assistant
@@ -76,7 +76,7 @@ async def process_messages(messages: list[IncomingMessage], sender: Sender, sess
             incoming_text=message.text,
             decision_source=decision.source,
             reply_text=decision.reply_text,
-            error="response_generation_failed" if decision.error else "",
+            error=RESPONSE_GENERATION_FAILED if decision.error else "",
             raw_event=json.dumps(message.raw_event, ensure_ascii=False),
         )
         session.add(event)
@@ -121,9 +121,11 @@ async def line_webhook(
     session: Session = Depends(get_session),
 ) -> dict[str, int]:
     settings = get_settings()
+    channel = resolve_channel(session, settings, "line")
+    if not channel.enabled:
+        return {"processed": 0}
     body = await request.body()
-    credentials = channel_credentials(session, settings, "line")
-    adapter = LineAdapter(credentials["channel_secret"], credentials["channel_access_token"])
+    adapter = LineAdapter(channel.credentials["channel_secret"], channel.credentials["channel_access_token"])
     if not adapter.validate_signature(body, x_line_signature):
         raise HTTPException(status_code=401, detail="Invalid LINE signature")
     payload = await request.json()
@@ -140,11 +142,13 @@ def messenger_verify(
     session: Session = Depends(get_session),
 ) -> PlainTextResponse:
     settings = get_settings()
-    credentials = channel_credentials(session, settings, "messenger")
+    channel = resolve_channel(session, settings, "messenger")
+    if not channel.enabled:
+        raise HTTPException(status_code=403, detail="Messenger channel disabled")
     adapter = MessengerAdapter(
-        credentials["verify_token"],
-        credentials["page_access_token"],
-        credentials["app_secret"],
+        channel.credentials["verify_token"],
+        channel.credentials["page_access_token"],
+        channel.credentials["app_secret"],
     )
     challenge = adapter.verify(hub_mode, hub_verify_token, hub_challenge)
     if challenge is None:
@@ -159,11 +163,13 @@ async def messenger_webhook(
     session: Session = Depends(get_session),
 ) -> dict[str, int]:
     settings = get_settings()
-    credentials = channel_credentials(session, settings, "messenger")
+    channel = resolve_channel(session, settings, "messenger")
+    if not channel.enabled:
+        return {"processed": 0}
     adapter = MessengerAdapter(
-        credentials["verify_token"],
-        credentials["page_access_token"],
-        credentials["app_secret"],
+        channel.credentials["verify_token"],
+        channel.credentials["page_access_token"],
+        channel.credentials["app_secret"],
     )
     body = await request.body()
     if not adapter.validate_signature(body, x_hub_signature_256):
@@ -181,8 +187,10 @@ async def telegram_webhook(
     session: Session = Depends(get_session),
 ) -> dict[str, int]:
     settings = get_settings()
-    credentials = channel_credentials(session, settings, "telegram")
-    adapter = TelegramAdapter(credentials["bot_token"], credentials["webhook_secret"])
+    channel = resolve_channel(session, settings, "telegram")
+    if not channel.enabled:
+        return {"processed": 0}
+    adapter = TelegramAdapter(channel.credentials["bot_token"], channel.credentials["webhook_secret"])
     body = await request.body()
     if not adapter.validate_webhook(body, x_telegram_bot_api_secret_token):
         raise HTTPException(status_code=403, detail="Invalid Telegram webhook secret")
@@ -190,6 +198,3 @@ async def telegram_webhook(
     messages = adapter.parse_events(payload)
     processed = await process_messages(messages, adapter.send_reply, session)
     return {"processed": processed}
-
-
-

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from inspect import isawaitable
 from typing import Any, Iterable
+
+logger = logging.getLogger(__name__)
+RESPONSE_GENERATION_FAILED = "response_generation_failed"
+RESPONSE_GENERATION_FAILED_MESSAGE = "Unable to generate a response. The fallback reply was used."
 
 
 @dataclass(frozen=True)
@@ -56,10 +61,15 @@ class ChatbotEngine:
             try:
                 rag_reply = await self._answer_with_rag(incoming.text.strip(), getattr(settings, "system_prompt", ""))
             except Exception as exc:
+                logger.error(
+                    "RAG response generation failed provider=%s error_type=%s",
+                    incoming.provider,
+                    type(exc).__name__,
+                )
                 rag_reply = ""
-                error = str(exc)
+                error = RESPONSE_GENERATION_FAILED
             else:
-                error = "RAG returned empty response" if not rag_reply.strip() else ""
+                error = RESPONSE_GENERATION_FAILED if not rag_reply.strip() else ""
             if rag_reply.strip():
                 return Decision(source="rag", reply_text=rag_reply.strip())
             if error:
