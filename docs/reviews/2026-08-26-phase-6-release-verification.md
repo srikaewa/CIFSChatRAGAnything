@@ -74,4 +74,4 @@ Post-remediation artifact audit: **86 tracked files, 0 artifact flags, 0 secret/
 
 ## Release Gate
 
-**PENDING FINAL COMMIT GATE** — remediation is green at 184 tests with compileall/diff/artifact checks clean. The final PASS will be recorded after the remediation commit and exact-tip verification.
+**PASS** — exact remediated code tip `795661d69e9f9778e5cd994314ca72d64ea0e717` verified clean: **184 passed in 7.63s**, `compileall` exit 0, `git diff --check` exit 0, `git status --short` clean, 86 tracked files, and 0 artifact flags.
