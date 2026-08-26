@@ -203,7 +203,9 @@ def test_knowledge_document_can_be_reindexed(client: TestClient, monkeypatch) ->
     assert status["rag_doc_id"] == "knowledge-1"
     document_id, queued_path, reindex = queued[-1]
     assert document_id == 1
-    assert Path(queued_path) == Path("data/uploads/menu.txt")
+    stored_path = Path(queued_path)
+    assert stored_path.parent == Path("data/uploads")
+    assert stored_path.suffix == ".txt"
     assert reindex is True
 
 

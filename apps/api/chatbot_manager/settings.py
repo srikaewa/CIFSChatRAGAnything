@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     rag_parser: str = "mineru"
     rag_parse_method: str = "auto"
     upload_dir: Path = Path("./data/uploads")
+    max_upload_bytes: int = 25_000_000
 
 def validate_deployment_settings(settings: Settings) -> None:
     if settings.app_env.strip().lower() in {"local", "test"}:

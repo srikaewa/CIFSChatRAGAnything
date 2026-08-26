@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from pathlib import PurePath
+from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -37,6 +38,24 @@ SUPPORTED_KNOWLEDGE_EXTENSIONS = {
     ".xls",
     ".xlsx",
 }
+
+
+class UploadTooLargeError(Exception):
+    pass
+
+
+async def write_bounded_upload(file: UploadFile, target: Path, max_bytes: int) -> None:
+    total = 0
+    try:
+        with target.open("xb") as output:
+            while chunk := await file.read(1024 * 1024):
+                total += len(chunk)
+                if total > max_bytes:
+                    raise UploadTooLargeError
+                output.write(chunk)
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
 
 LLM_MODELS = [
     "gpt-5.5", "gpt-5.4", "gpt-5.3", "gpt-5.2", "gpt-5.1", "gpt-5",
@@ -622,6 +641,7 @@ async def index_document_task(document_id: int, path: str, reindex: bool = False
 @router.get("/knowledge", response_class=HTMLResponse)
 def knowledge_page(
     request: Request,
+    error: str | None = None,
     admin_email: str = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Response:
@@ -629,7 +649,16 @@ def knowledge_page(
     return templates.TemplateResponse(
         request,
         "knowledge.html",
-        {"admin_email": admin_email, "active_page": "knowledge", "documents": documents},
+        {
+            "admin_email": admin_email,
+            "active_page": "knowledge",
+            "documents": documents,
+            "error": {
+                "file_too_large": "File exceeds the configured upload size limit.",
+                "unsupported_file_type": "Unsupported file type.",
+                "delete_failed": "Could not remove the document from the knowledge index. Retry deletion.",
+            }.get(error or "", ""),
+        },
     )
 
 
@@ -723,11 +752,15 @@ async def upload_knowledge(
         if not file.filename:
             continue
         filename = PurePath(file.filename).name
-        if Path(filename).suffix.lower() not in SUPPORTED_KNOWLEDGE_EXTENSIONS:
-            continue
+        suffix = Path(filename).suffix.lower()
+        if suffix not in SUPPORTED_KNOWLEDGE_EXTENSIONS:
+            return RedirectResponse("/knowledge?error=unsupported_file_type", status_code=303)
 
-        target = settings.upload_dir / filename
-        target.write_bytes(await file.read())
+        target = settings.upload_dir / f"{uuid4().hex}{suffix}"
+        try:
+            await write_bounded_upload(file, target, settings.max_upload_bytes)
+        except UploadTooLargeError:
+            return RedirectResponse("/knowledge?error=file_too_large", status_code=303)
 
         document = KnowledgeDocument(filename=filename, path=str(target), status="pending")
         session.add(document)
@@ -778,7 +811,12 @@ async def delete_knowledge(
     try:
         await rag_service.delete_document(document.rag_doc_id)
     except Exception:
-        pass
+        document.status = "failed"
+        document.error = "Could not remove the document from the knowledge index. Retry deletion."
+        document.updated_at = utc_now()
+        session.add(document)
+        session.commit()
+        return RedirectResponse("/knowledge?error=delete_failed", status_code=303)
 
     if document.path:
         Path(document.path).unlink(missing_ok=True)

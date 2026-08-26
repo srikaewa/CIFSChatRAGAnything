@@ -5,6 +5,10 @@
   <p>Upload documents for RAG-Anything indexing.</p>
 </section>
 
+{% if error %}
+<p class="alert alert-error">{{ error }}</p>
+{% endif %}
+
 <form class="panel form-grid" method="post" action="/knowledge" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
   <label class="wide">Upload documents <input type="file" name="files" multiple required></label>
