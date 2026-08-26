@@ -56,9 +56,9 @@ def test_unconfigured_webhooks_fail_closed(client: TestClient) -> None:
     )
     telegram_response = client.post("/webhooks/telegram", json={"update_id": 1})
 
-    assert line_response.status_code == 401
-    assert messenger_response.status_code == 403
-    assert telegram_response.status_code == 403
+    assert line_response.status_code == 503
+    assert messenger_response.status_code == 503
+    assert telegram_response.status_code == 503
 
 
 def test_messenger_webhook_rejects_missing_signature(client: TestClient) -> None:

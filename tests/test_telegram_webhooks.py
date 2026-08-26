@@ -90,13 +90,13 @@ def test_telegram_webhook_accepts_non_message_events(client: TestClient) -> None
     assert response.json() == {"processed": 0}
 
 
-def test_telegram_webhook_accepts_without_secret(client: TestClient) -> None:
+def test_telegram_webhook_unconfigured_returns_not_ready(client: TestClient) -> None:
     response = client.post(
         "/webhooks/telegram",
         json={"update_id": 1},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 503
 
 
 @respx.mock

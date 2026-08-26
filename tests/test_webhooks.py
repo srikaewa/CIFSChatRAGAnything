@@ -40,7 +40,7 @@ def test_messenger_verification(client: TestClient) -> None:
         params={"hub.mode": "subscribe", "hub.verify_token": "", "hub.challenge": "challenge-1"},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 503
 
 
 def test_messenger_verification_uses_saved_channel_verify_token(client: TestClient) -> None:
@@ -50,7 +50,7 @@ def test_messenger_verification_uses_saved_channel_verify_token(client: TestClie
                 provider="messenger",
                 enabled=True,
                 display_name="Messenger",
-                credential_json='{"verify_token": "db-verify", "page_access_token": "", "app_secret": ""}',
+                credential_json='{"verify_token": "db-verify", "page_access_token": "page-token", "app_secret": "app-secret"}',
             )
         )
         session.commit()
@@ -65,6 +65,16 @@ def test_messenger_verification_uses_saved_channel_verify_token(client: TestClie
 
 
 def test_line_webhook_rejects_bad_signature(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        session.add(
+            Channel(
+                provider="line",
+                enabled=True,
+                display_name="LINE",
+                credential_json='{"channel_secret": "db-secret", "channel_access_token": "db-token"}',
+            )
+        )
+        session.commit()
     response = client.post("/webhooks/line", content=b'{"events":[]}', headers={"x-line-signature": "bad"})
 
     assert response.status_code == 401

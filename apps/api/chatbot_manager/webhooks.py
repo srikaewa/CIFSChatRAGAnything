@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 from sqlmodel import Session, select
 
-from chatbot_manager.channel_config import channel_credentials, resolve_channel
+from chatbot_manager.channel_config import ResolvedChannel, channel_credentials, resolve_channel
 from chatbot_manager.channels.line import IncomingMessage, LineAdapter
 from chatbot_manager.channels.messenger import MessengerAdapter
 from chatbot_manager.channels.telegram import TelegramAdapter
@@ -20,6 +20,21 @@ from chatbot_manager.settings import get_settings
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks")
 Sender = Callable[[dict[str, Any], str], Awaitable[None]]
+
+
+def _require_ready(channel: ResolvedChannel, provider: str) -> None:
+    if channel.state in {"incomplete", "failed"}:
+        raise HTTPException(status_code=503, detail=f"{provider} channel is not ready")
+
+
+async def _json_payload(request: Request) -> dict[str, Any]:
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="Malformed JSON payload") from None
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Malformed JSON payload")
+    return payload
 
 
 def get_assistant_settings(session: Session) -> AssistantSettings:
@@ -124,11 +139,12 @@ async def line_webhook(
     channel = resolve_channel(session, settings, "line")
     if not channel.enabled:
         return {"processed": 0}
+    _require_ready(channel, "line")
     body = await request.body()
     adapter = LineAdapter(channel.credentials["channel_secret"], channel.credentials["channel_access_token"])
     if not adapter.validate_signature(body, x_line_signature):
         raise HTTPException(status_code=401, detail="Invalid LINE signature")
-    payload = await request.json()
+    payload = await _json_payload(request)
     messages = adapter.parse_events(payload)
     processed = await process_messages(messages, adapter.send_reply, session)
     return {"processed": processed}
@@ -145,6 +161,7 @@ def messenger_verify(
     channel = resolve_channel(session, settings, "messenger")
     if not channel.enabled:
         raise HTTPException(status_code=403, detail="Messenger channel disabled")
+    _require_ready(channel, "messenger")
     adapter = MessengerAdapter(
         channel.credentials["verify_token"],
         channel.credentials["page_access_token"],
@@ -166,6 +183,7 @@ async def messenger_webhook(
     channel = resolve_channel(session, settings, "messenger")
     if not channel.enabled:
         return {"processed": 0}
+    _require_ready(channel, "messenger")
     adapter = MessengerAdapter(
         channel.credentials["verify_token"],
         channel.credentials["page_access_token"],
@@ -174,7 +192,7 @@ async def messenger_webhook(
     body = await request.body()
     if not adapter.validate_signature(body, x_hub_signature_256):
         raise HTTPException(status_code=401, detail="Invalid Messenger signature")
-    payload = await request.json()
+    payload = await _json_payload(request)
     messages = adapter.parse_events(payload)
     processed = await process_messages(messages, adapter.send_reply, session)
     return {"processed": processed}
@@ -190,11 +208,12 @@ async def telegram_webhook(
     channel = resolve_channel(session, settings, "telegram")
     if not channel.enabled:
         return {"processed": 0}
+    _require_ready(channel, "telegram")
     adapter = TelegramAdapter(channel.credentials["bot_token"], channel.credentials["webhook_secret"])
     body = await request.body()
     if not adapter.validate_webhook(body, x_telegram_bot_api_secret_token):
         raise HTTPException(status_code=403, detail="Invalid Telegram webhook secret")
-    payload = await request.json()
+    payload = await _json_payload(request)
     messages = adapter.parse_events(payload)
     processed = await process_messages(messages, adapter.send_reply, session)
     return {"processed": processed}
