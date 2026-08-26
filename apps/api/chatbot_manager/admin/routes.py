@@ -310,6 +310,10 @@ def assistant_settings(session: Session) -> AssistantSettings:
     return settings
 
 
+GRAPH_ALLOWED_MODES = {"all", "local"}
+GRAPH_MAX_LABEL_LENGTH = 200
+
+
 def clamp_query_value(value: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(value, maximum))
 
@@ -748,6 +752,8 @@ async def knowledge_graph_api(
 ) -> dict[str, object]:
     settings = assistant_settings(session)
     graph_mode = mode.strip().lower() or "local"
+    if graph_mode not in GRAPH_ALLOWED_MODES:
+        raise HTTPException(status_code=400, detail="Graph mode must be 'all' or 'local'.")
     node_limit = clamp_query_value(max_nodes, 1, 500)
     try:
         graph_service = rag_service_from_assistant(settings)
@@ -758,6 +764,11 @@ async def knowledge_graph_api(
         graph_label = label.strip()
         if not graph_label:
             raise HTTPException(status_code=400, detail="Graph label is required in focused mode.")
+        if len(graph_label) > GRAPH_MAX_LABEL_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Graph label must be {GRAPH_MAX_LABEL_LENGTH} characters or fewer.",
+            )
         depth = clamp_query_value(max_depth, 1, 5)
         graph = await graph_service.knowledge_graph(label=graph_label, max_depth=depth, max_nodes=node_limit)
         return normalize_graph_response(graph, center_node_id=graph_label, depth=depth)
