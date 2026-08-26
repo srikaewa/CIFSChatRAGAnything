@@ -73,4 +73,4 @@ The browser run intentionally used no live RAG credentials; the optional graph-l
 
 ## Phase 5 Gate
 
-Phase 5 gate: PASS pending final evidence commit and clean `git status --short` confirmation.
+Phase 5 gate: PASS. The evidence commit was followed by a clean `git status --short` check.
