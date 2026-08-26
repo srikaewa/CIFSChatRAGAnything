@@ -24,7 +24,7 @@ Command shape:
 python -m pytest -q -W default --basetemp <writable-phase6-temp>
 ```
 
-Fresh result: **181 passed in 10.78s**, exit code 0, no warning output.
+Initial Phase 6 result: **181 passed**. After manual-review remediation and three added regressions: **184 passed in 7.71s**, exit code 0, no warning output.
 
 ### Functional/admin/provider smoke suite
 
@@ -51,7 +51,7 @@ The completion-series history is a straight stack from `main` commit `3afbc42` t
 
 Tracked-file audit result:
 
-- Tracked files inspected: **85**.
+- Tracked files inspected after remediation: **86**.
 - Local artifact filename flags (`.env`, SQLite DBs, uploads/RAG work data, pytest/cache/egg-info/pyc/temp): **0**.
 - `git ls-files .env`: **none**.
 - Conservative private-key and long secret-like assignment scan: **0 candidates**.
@@ -60,10 +60,18 @@ Tracked-file audit result:
 
 Provider, RAG/LLM, and Tailscale integrations are exercised through mocks in automated tests. Phase 6 intentionally did not register live webhooks, open a live Funnel, or use production credentials. Optional authorized deployment smoke checks are documented in `docs/releases/2026-08-26-release-candidate.md`.
 
-## Independent Review
+## Manual Release Review
 
-An independent read-only release review was requested against `3afbc42..a993766`, but the delegated reviewer remained queued and returned no result during this verification run. Phase 6 does not require a subagent review as a release-gate item, and no merge is being performed. A completed independent review remains required before any merge to `main`.
+A structured manual review was completed after the delegated reviewer subsystem failed to return findings. The review identified three pre-merge issues:
+
+1. Telegram `setWebhook`/`deleteWebhook` transport failures could escape the admin flow, and setup failure could leave Tailscale Funnel enabled.
+2. A normal Telegram channel save could discard the persisted `webhook_url`.
+3. A pre-existing exported Codex session (`codex-session-20260707-152637-019f3d30`) was tracked in Git and had not been flagged by the earlier narrow artifact audit.
+
+All three findings were remediated before merge. Three regression tests were added and observed failing before the production fixes, then passing afterward. The Codex session export was removed from the release branch and `codex-session-*/` was added to `.gitignore`.
+
+Post-remediation artifact audit: **86 tracked files, 0 artifact flags, 0 secret/private-key candidates**.
 
 ## Release Gate
 
-**PASS** — post-evidence commit verification completed: `181 passed in 7.65s`, `compileall` exit 0, `git diff --check` exit 0, and `git status --short` clean.
+**PENDING FINAL COMMIT GATE** — remediation is green at 184 tests with compileall/diff/artifact checks clean. The final PASS will be recorded after the remediation commit and exact-tip verification.

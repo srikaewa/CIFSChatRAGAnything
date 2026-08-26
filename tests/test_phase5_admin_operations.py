@@ -2,8 +2,12 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from chatbot_manager.admin.telegram_ops import discover_tailscale_host, run_funnel, service_port, tailscale_command
+from chatbot_manager.channel_config import channel_credentials, save_channel, update_channel_credentials
+from chatbot_manager.db import get_engine
+from chatbot_manager.settings import get_settings
 
 
 def login(client: TestClient) -> str:
@@ -71,6 +75,99 @@ def test_run_funnel_maps_access_denied_without_exposing_stderr() -> None:
     assert run_funnel("on", 8765, run=fake_run, platform_name="Windows") == "tailscale_access_denied"
     assert calls == [["tailscale", "funnel", "--bg", "8765"]]
 
+
+
+def test_normal_channel_save_preserves_telegram_webhook_url(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        save_channel(
+            session,
+            "telegram",
+            enabled=True,
+            incoming_credentials={"bot_token": "bot-token", "webhook_secret": "hook-secret"},
+        )
+        update_channel_credentials(
+            session,
+            "telegram",
+            {"webhook_url": "https://bot.example.ts.net/webhooks/telegram"},
+        )
+        save_channel(
+            session,
+            "telegram",
+            enabled=True,
+            incoming_credentials={"bot_token": "", "webhook_secret": ""},
+        )
+        credentials = channel_credentials(session, get_settings(), "telegram")
+
+    assert credentials["bot_token"] == "bot-token"
+    assert credentials["webhook_secret"] == "hook-secret"
+    assert credentials["webhook_url"] == "https://bot.example.ts.net/webhooks/telegram"
+
+
+def test_telegram_setup_failure_rolls_back_funnel_and_returns_safe_error(client: TestClient, monkeypatch) -> None:
+    csrf_token = login(client)
+    with Session(get_engine()) as session:
+        save_channel(
+            session,
+            "telegram",
+            enabled=True,
+            incoming_credentials={"bot_token": "super-secret-bot-token", "webhook_secret": "hook-secret"},
+        )
+
+    funnel_actions: list[tuple[str, int]] = []
+    monkeypatch.setattr(
+        "chatbot_manager.admin.routes.discover_tailscale_host",
+        lambda: ("bot.example.ts.net", None),
+    )
+
+    def fake_run_funnel(action: str, port: int) -> str | None:
+        funnel_actions.append((action, port))
+        return None
+
+    async def failing_set_webhook(self, url: str):
+        raise RuntimeError("request failed at https://api.telegram.org/botsuper-secret-bot-token/setWebhook")
+
+    monkeypatch.setattr("chatbot_manager.admin.routes.run_funnel", fake_run_funnel)
+    monkeypatch.setattr("chatbot_manager.admin.routes.TelegramAdapter.set_webhook", failing_set_webhook)
+
+    safe_client = TestClient(client.app, raise_server_exceptions=False)
+    safe_client.cookies.update(client.cookies)
+    response = safe_client.post(
+        "/channels/telegram/setup-webhook",
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/channels?error=telegram_set_webhook_failed"
+    assert "super-secret-bot-token" not in response.text
+    assert funnel_actions == [("on", 8000), ("off", 8000)]
+
+
+def test_telegram_disable_failure_returns_safe_error(client: TestClient, monkeypatch) -> None:
+    csrf_token = login(client)
+    with Session(get_engine()) as session:
+        save_channel(
+            session,
+            "telegram",
+            enabled=True,
+            incoming_credentials={"bot_token": "super-secret-bot-token", "webhook_secret": "hook-secret"},
+        )
+
+    async def failing_delete_webhook(self):
+        raise RuntimeError("request failed at https://api.telegram.org/botsuper-secret-bot-token/deleteWebhook")
+
+    monkeypatch.setattr("chatbot_manager.admin.routes.TelegramAdapter.delete_webhook", failing_delete_webhook)
+    safe_client = TestClient(client.app, raise_server_exceptions=False)
+    safe_client.cookies.update(client.cookies)
+    response = safe_client.post(
+        "/channels/telegram/disable-webhook",
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/channels?error=telegram_delete_webhook_failed"
+    assert "super-secret-bot-token" not in response.text
 
 def test_channels_page_has_accessible_feedback_and_secret_fields(client: TestClient) -> None:
     login(client)

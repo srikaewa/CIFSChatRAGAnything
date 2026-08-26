@@ -265,8 +265,18 @@ async def telegram_setup_webhook(
         return RedirectResponse(f"/channels?error={error}", status_code=303)
     funnel_url = f"https://{funnel_host}/webhooks/telegram"
     adapter = TelegramAdapter(credentials["bot_token"], credentials["webhook_secret"])
-    wh_result = await adapter.set_webhook(funnel_url)
+    try:
+        wh_result = await adapter.set_webhook(funnel_url)
+    except Exception as exc:
+        logger.error("Telegram setWebhook failed error_type=%s", type(exc).__name__)
+        cleanup_error = run_funnel("off", port)
+        if cleanup_error:
+            logger.error("Tailscale Funnel rollback failed error_code=%s", cleanup_error)
+        return RedirectResponse("/channels?error=telegram_set_webhook_failed", status_code=303)
     if not wh_result.get("ok"):
+        cleanup_error = run_funnel("off", port)
+        if cleanup_error:
+            logger.error("Tailscale Funnel rollback failed error_code=%s", cleanup_error)
         return RedirectResponse("/channels?error=telegram_set_webhook_failed", status_code=303)
     update_channel_credentials(session, "telegram", {"webhook_url": funnel_url})
     return RedirectResponse("/channels?saved=1", status_code=303)
@@ -283,7 +293,11 @@ async def telegram_disable_webhook(
     if not credentials.get("bot_token"):
         return RedirectResponse("/channels?error=telegram_bot_token_missing", status_code=303)
     adapter = TelegramAdapter(credentials["bot_token"], credentials.get("webhook_secret", ""))
-    wh_result = await adapter.delete_webhook()
+    try:
+        wh_result = await adapter.delete_webhook()
+    except Exception as exc:
+        logger.error("Telegram deleteWebhook failed error_type=%s", type(exc).__name__)
+        return RedirectResponse("/channels?error=telegram_delete_webhook_failed", status_code=303)
     if not wh_result.get("ok"):
         return RedirectResponse("/channels?error=telegram_delete_webhook_failed", status_code=303)
     update_channel_credentials(session, "telegram", {"webhook_url": ""})

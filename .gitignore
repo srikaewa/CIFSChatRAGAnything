@@ -11,3 +11,4 @@ data/rag/
 .superpowers/
 .tokensave/
 .env
+codex-session-*/

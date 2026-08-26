@@ -133,7 +133,7 @@ def save_channel(
     definition = CHANNEL_DEFINITIONS[provider]
     channel = get_channel(session, provider)
     existing = decode_credentials(channel)
-    credentials: dict[str, str] = {}
+    credentials: dict[str, str] = dict(existing)
     for field in definition.fields:
         incoming = incoming_credentials.get(field, "").strip()
         credentials[field] = incoming if incoming else existing.get(field, "")

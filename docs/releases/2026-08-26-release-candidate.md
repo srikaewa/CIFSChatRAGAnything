@@ -33,17 +33,27 @@ This release candidate completes the six-phase codebase completion program for C
 
 Fresh Phase 6 evidence before release-note commit:
 
-- Full warning-enabled automated suite: **181 passed**.
+- Full warning-enabled automated suite after manual-review remediation: **184 passed**.
 - Functional/admin/provider smoke suite: **116 passed**.
 - Focused security regression suite: **49 passed**.
 - `python -m compileall -q apps/api`: PASS.
 - `git diff --check`: PASS.
-- Tracked-file audit: 85 tracked files, 0 local artifact flags.
+- Tracked-file audit after remediation: 86 tracked files, 0 local artifact flags.
 - `.env` tracked check: none.
 - Conservative private-key/credential-assignment scan: 0 candidates.
-- Completion-series diff reviewed from `3afbc42..a993766`: 67 files changed, 7,517 insertions, 292 deletions.
+- Completion-series product diff was reviewed manually, including security, provider operations, admin/configuration, RAG, and release artifacts.
 
 A final post-evidence full suite/static/status gate is recorded in `docs/reviews/2026-08-26-phase-6-release-verification.md`.
+
+## Manual release review remediation
+
+A manual release review found three pre-merge issues and all were remediated before integration:
+
+- Telegram webhook setup now catches provider transport failures and rolls Tailscale Funnel back when setup fails.
+- Normal Telegram channel saves preserve the stored active `webhook_url`.
+- The tracked `codex-session-*` export was removed and `codex-session-*/` is now ignored.
+
+Three regression tests were added for these behaviors. The full warning-enabled suite now contains **184 passing tests**.
 
 ## External-service verification
 
