@@ -297,10 +297,20 @@ def test_each_admin_post_form_has_its_own_csrf_token(client: TestClient) -> None
             ), f"POST form without a non-empty CSRF token on {path}"
 
 
-def test_client_fixture_overrides_host_and_dotenv_credentials(client: TestClient) -> None:
-    from chatbot_manager.settings import get_settings
+def test_client_fixture_overrides_host_and_dotenv_credentials(client: TestClient, tmp_path: Path) -> None:
+    dotenv = tmp_path / ".env"
+    dotenv.write_text(
+        "LINE_CHANNEL_SECRET=dotenv-line-secret\n"
+        "LINE_CHANNEL_ACCESS_TOKEN=dotenv-line-token\n"
+        "MESSENGER_VERIFY_TOKEN=dotenv-verify-token\n"
+        "MESSENGER_PAGE_ACCESS_TOKEN=dotenv-page-token\n"
+        "MESSENGER_APP_SECRET=dotenv-app-secret\n"
+        "TELEGRAM_BOT_TOKEN=dotenv-bot-token\n"
+        "LLM_API_KEY=dotenv-llm-key\n",
+        encoding="utf-8",
+    )
 
-    settings = get_settings()
+    settings = Settings(_env_file=dotenv)
     assert settings.line_channel_secret == ""
     assert settings.line_channel_access_token == ""
     assert settings.messenger_verify_token == ""
