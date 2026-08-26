@@ -7,13 +7,13 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 from httpx import Response
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from chatbot_manager.channel_config import resolve_channel
 from chatbot_manager.db import get_engine
 from chatbot_manager.channels.line import IncomingMessage
-from chatbot_manager.models import AssistantSettings, Channel
-from chatbot_manager.webhooks import _notify_admin
+from chatbot_manager.models import AssistantSettings, Channel, ChatEvent
+from chatbot_manager.webhooks import _notify_admin, process_messages
 from chatbot_manager.settings import get_settings
 
 
@@ -389,3 +389,57 @@ async def test_admin_notification_valid_telegram_destination_is_sent(client: Tes
     assert result.status == "sent"
     assert result.error_code == ""
     assert sent[0][0] == {"chat_id": -100123}
+
+
+
+@pytest.mark.asyncio
+async def test_test_chat_and_live_message_use_same_decision_engine(client: TestClient) -> None:
+    csrf_token = login(client)
+    with Session(get_engine()) as session:
+        session.add(AssistantSettings(rag_enabled=False, fallback_reply="Fallback."))
+        session.commit()
+    client.post(
+        "/rules",
+        data={
+            "csrf_token": csrf_token,
+            "pattern": "price",
+            "match_type": "contains",
+            "reply_text": "Price is 100.",
+            "priority": "10",
+        },
+        follow_redirects=False,
+    )
+
+    test_response = client.post(
+        "/test-chat",
+        data={"csrf_token": csrf_token, "message": "price please"},
+    )
+    assert test_response.status_code == 200
+
+    sent: list[str] = []
+
+    async def sender(reply_context, text):
+        sent.append(text)
+
+    with Session(get_engine()) as session:
+        await process_messages(
+            [IncomingMessage("line", "user-live", "price please", {"reply_token": "r"}, {})],
+            sender,
+            session,
+        )
+        events = list(session.exec(select(ChatEvent).order_by(ChatEvent.id)).all())
+
+    assert len(events) == 2
+    assert events[0].provider == "test"
+    assert events[1].provider == "line"
+    assert events[0].decision_source == events[1].decision_source == "rule"
+    assert events[0].reply_text == events[1].reply_text == "Price is 100."
+    assert sent == ["Price is 100."]
+
+
+def test_test_chat_page_documents_provider_side_effect_difference(client: TestClient) -> None:
+    login(client)
+    response = client.get("/test-chat")
+    assert response.status_code == 200
+    assert "same decision engine" in response.text.lower()
+    assert "does not send provider replies or admin notifications" in response.text.lower()

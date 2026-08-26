@@ -218,3 +218,37 @@ async def test_rag_error_uses_fallback() -> None:
 
     assert decision.source == "fallback"
     assert decision.reply_text == "Please contact staff."
+
+
+
+@pytest.mark.asyncio
+async def test_escalating_rule_wins_before_rag_and_preserves_notification_context() -> None:
+    engine = ChatbotEngine(FakeRagService(answer="rag reply"))
+    settings = AssistantSettings(rag_enabled=True)
+    rule = Rule(
+        priority=1,
+        match_type="contains",
+        pattern="human",
+        reply_text="Internal escalation context.",
+        escalate=True,
+        escalate_message="A human will follow up.",
+    )
+
+    decision = await engine.answer(ChatbotInput("need human help", "line", "u9"), [rule], settings)
+
+    assert decision.source == "rule"
+    assert decision.escalate is True
+    assert decision.reply_text == "A human will follow up."
+    assert decision.rule_reply == "Internal escalation context."
+
+
+@pytest.mark.asyncio
+async def test_rag_exception_sets_stable_error_code() -> None:
+    engine = ChatbotEngine(FailingRagService())
+    settings = AssistantSettings(rag_enabled=True, fallback_reply="Safe fallback.")
+
+    decision = await engine.answer(ChatbotInput("unknown", "telegram", "u10"), [], settings)
+
+    assert decision.source == "fallback"
+    assert decision.reply_text == "Safe fallback."
+    assert decision.error == "response_generation_failed"
