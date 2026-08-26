@@ -68,6 +68,7 @@
   const neighborsList = document.getElementById("graph-neighbors");
   let cy = null;
   let selectedNodeId = "";
+  let selectedNodeLabel = "";
   let currentGraph = null;
 
   const nodeTypeColors = {
@@ -87,6 +88,36 @@
     image: "#FD9644",
     equation: "#FED330",
   };
+
+  function resetGraphView(message = "No graph nodes found.", statusMessage = message) {
+    if (cy) cy.destroy();
+    cy = null;
+    currentGraph = null;
+    selectedNodeId = "";
+    selectedNodeLabel = "";
+    expandButton.disabled = true;
+    neighborsList.innerHTML = "";
+    detailTitle.textContent = "No node selected";
+    detailMeta.textContent = "Select a node or relationship.";
+    detailProperties.textContent = "{}";
+    empty.textContent = message;
+    empty.hidden = false;
+    status.textContent = statusMessage;
+  }
+
+  function showGraphError(message) {
+    resetGraphView(message, message);
+  }
+
+  function updateVisibleStats() {
+    if (!cy || !currentGraph) return;
+    const totalNodes = currentGraph.stats?.node_count ?? cy.nodes().length;
+    const totalEdges = currentGraph.stats?.edge_count ?? cy.edges().length;
+    const visibleNodes = cy.nodes().filter((node) => !node.hasClass("filtered-out")).length;
+    const visibleEdges = cy.edges().filter((edge) => !edge.hasClass("filtered-out")).length;
+    const warningText = (currentGraph.warnings || []).join(" ");
+    status.textContent = `${visibleNodes} of ${totalNodes} nodes, ${visibleEdges} of ${totalEdges} relationships. ${warningText}`.trim();
+  }
 
   function graphElements(graph) {
     return [
@@ -127,19 +158,24 @@
   }
 
   function drawGraph(graph) {
+    if (cy) cy.destroy();
+    cy = null;
     currentGraph = graph;
-    empty.hidden = (graph.nodes || []).length > 0;
     selectedNodeId = "";
+    selectedNodeLabel = "";
     expandButton.disabled = true;
     neighborsList.innerHTML = "";
+    detailTitle.textContent = "No node selected";
+    detailMeta.textContent = "Select a node or relationship.";
+    detailProperties.textContent = "{}";
 
     if (!(graph.nodes || []).length) {
-      if (cy) cy.destroy();
-      cy = null;
-      status.textContent = (graph.warnings || ["No graph nodes found."]).join(" ");
+      const emptyMessage = (graph.warnings || ["No graph nodes found."]).join(" ") || "No graph nodes found.";
+      resetGraphView(emptyMessage, emptyMessage);
       return;
     }
 
+    empty.hidden = true;
     cy = cytoscape({
       container: canvas,
       elements: graphElements(graph),
@@ -181,6 +217,10 @@
           },
         },
         {
+          selector: ".filtered-out",
+          style: { display: "none" },
+        },
+        {
           selector: ".faded",
           style: { opacity: 0.16, "text-opacity": 0.05 },
         },
@@ -200,7 +240,6 @@
     populateTypeFilter(graph.nodes || []);
     runLayout();
     applyFilters();
-    status.textContent = `${graph.stats.node_count} nodes, ${graph.stats.edge_count} relationships. ${(graph.warnings || []).join(" ")}`.trim();
   }
 
   function populateTypeFilter(nodes) {
@@ -212,6 +251,7 @@
 
   function selectNode(node) {
     selectedNodeId = node.id();
+    selectedNodeLabel = String(node.data("label") || node.id());
     const neighbors = node.closedNeighborhood();
     cy.elements().addClass("faded").removeClass("highlighted");
     neighbors.removeClass("faded").addClass("highlighted");
@@ -225,6 +265,7 @@
 
   function selectEdge(edge) {
     selectedNodeId = "";
+    selectedNodeLabel = "";
     expandButton.disabled = true;
     cy.elements().addClass("faded").removeClass("highlighted");
     edge.connectedNodes().add(edge).removeClass("faded").addClass("highlighted");
@@ -236,6 +277,7 @@
 
   function clearSelection() {
     selectedNodeId = "";
+    selectedNodeLabel = "";
     expandButton.disabled = true;
     if (cy) cy.elements().removeClass("faded highlighted");
     detailTitle.textContent = "No node selected";
@@ -248,16 +290,19 @@
     if (!cy) return;
     const query = searchInput.value.trim().toLowerCase();
     const type = typeFilter.value;
-    cy.elements().removeClass("faded");
+    cy.elements().removeClass("filtered-out");
     cy.nodes().forEach((node) => {
       const label = String(node.data("label") || "").toLowerCase();
       if ((query && !label.includes(query)) || (type && node.data("type") !== type)) {
-        node.addClass("faded");
+        node.addClass("filtered-out");
       }
     });
     cy.edges().forEach((edge) => {
-      if (edge.source().hasClass("faded") || edge.target().hasClass("faded")) edge.addClass("faded");
+      if (edge.source().hasClass("filtered-out") || edge.target().hasClass("filtered-out")) {
+        edge.addClass("filtered-out");
+      }
     });
+    updateVisibleStats();
   }
 
   function syncModeControls() {
@@ -273,16 +318,17 @@
     if (labelOverride) {
       params.set("mode", "local");
       params.set("label", labelOverride);
+      params.set("max_depth", "1");
     }
+    clearSelection();
     status.textContent = "Loading graph...";
-    empty.hidden = false;
     try {
       const response = await fetch(`/api/knowledge-graph?${params.toString()}`);
       const payload = await response.json();
       if (!response.ok) throw new Error(graphErrorMessage(payload));
       drawGraph(payload);
     } catch (error) {
-      status.textContent = error.message;
+      showGraphError(error.message);
     }
   }
 
@@ -298,11 +344,14 @@
     loadGraph();
   });
   expandButton.addEventListener("click", () => {
-    if (selectedNodeId) {
+    if (selectedNodeLabel) {
       modeSelect.value = "local";
-      labelSelect.value = selectedNodeId;
+      depthInput.value = "1";
+      if (Array.from(labelSelect.options).some((option) => option.value === selectedNodeLabel)) {
+        labelSelect.value = selectedNodeLabel;
+      }
       syncModeControls();
-      loadGraph(selectedNodeId);
+      loadGraph(selectedNodeLabel);
     }
   });
 
@@ -319,11 +368,12 @@
         syncModeControls();
         await loadGraph();
       } else {
-        status.textContent = "No graph entities extracted. Check LLM settings and reindex.";
+        const noEntitiesMessage = "No graph entities extracted. Check LLM settings and reindex.";
+        resetGraphView(noEntitiesMessage, noEntitiesMessage);
         syncModeControls();
       }
     } catch (error) {
-      status.textContent = error.message;
+      showGraphError(error.message);
     }
   }
 
