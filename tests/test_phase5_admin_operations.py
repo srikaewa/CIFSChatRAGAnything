@@ -70,3 +70,27 @@ def test_run_funnel_maps_access_denied_without_exposing_stderr() -> None:
 
     assert run_funnel("on", 8765, run=fake_run, platform_name="Windows") == "tailscale_access_denied"
     assert calls == [["tailscale", "funnel", "--bg", "8765"]]
+
+
+def test_channels_page_has_accessible_feedback_and_secret_fields(client: TestClient) -> None:
+    login(client)
+    html = client.get("/channels?saved=1").text
+    assert 'role="status"' in html
+    assert 'aria-label="Primary navigation"' in html
+    assert 'aria-current="page"' in html
+    assert 'type="password"' in html
+    assert 'autocomplete="new-password"' in html
+    assert 'type="button"' in html
+
+
+def test_channels_page_error_uses_alert_role(client: TestClient) -> None:
+    login(client)
+    html = client.get("/channels?error=channel_save_failed").text
+    assert 'role="alert"' in html
+    assert "Could not save channel settings" in html
+
+
+def test_base_css_keeps_visible_focus_and_narrow_layout() -> None:
+    css = Path("apps/api/chatbot_manager/static/styles.css").read_text(encoding="utf-8")
+    assert ":focus-visible" in css
+    assert "@media (max-width: 760px)" in css

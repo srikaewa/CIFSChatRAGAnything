@@ -9,15 +9,15 @@
   <body>
     <aside class="sidebar">
       <div class="brand"><img src="/static/CIFS_logo.png" alt="CIFS" class="brand-logo">Chatbot Manager</div>
-      <nav>
-        <a href="/" class="{{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
-        <a href="/channels" class="{{ 'active' if active_page == 'channels' else '' }}">Channels</a>
-        <a href="/rules" class="{{ 'active' if active_page == 'rules' else '' }}">Rules</a>
-        <a href="/knowledge" class="{{ 'active' if active_page == 'knowledge' else '' }}">Knowledge</a>
-        <a href="/knowledge-graph" class="{{ 'active' if active_page == 'knowledge_graph' else '' }}">Graph</a>
-        <a href="/assistant" class="{{ 'active' if active_page == 'assistant' else '' }}">Assistant</a>
-        <a href="/test-chat" class="{{ 'active' if active_page == 'test_chat' else '' }}">Test Chat</a>
-        <a href="/logs" class="{{ 'active' if active_page == 'logs' else '' }}">Logs</a>
+      <nav aria-label="Primary navigation">
+        <a href="/" class="{{ 'active' if active_page == 'dashboard' else '' }}" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+        <a href="/channels" class="{{ 'active' if active_page == 'channels' else '' }}" {% if active_page == 'channels' %}aria-current="page"{% endif %}>Channels</a>
+        <a href="/rules" class="{{ 'active' if active_page == 'rules' else '' }}" {% if active_page == 'rules' %}aria-current="page"{% endif %}>Rules</a>
+        <a href="/knowledge" class="{{ 'active' if active_page == 'knowledge' else '' }}" {% if active_page == 'knowledge' %}aria-current="page"{% endif %}>Knowledge</a>
+        <a href="/knowledge-graph" class="{{ 'active' if active_page == 'knowledge_graph' else '' }}" {% if active_page == 'knowledge_graph' %}aria-current="page"{% endif %}>Graph</a>
+        <a href="/assistant" class="{{ 'active' if active_page == 'assistant' else '' }}" {% if active_page == 'assistant' %}aria-current="page"{% endif %}>Assistant</a>
+        <a href="/test-chat" class="{{ 'active' if active_page == 'test_chat' else '' }}" {% if active_page == 'test_chat' %}aria-current="page"{% endif %}>Test Chat</a>
+        <a href="/logs" class="{{ 'active' if active_page == 'logs' else '' }}" {% if active_page == 'logs' %}aria-current="page"{% endif %}>Logs</a>
       </nav>
     </aside>
     <main class="main">

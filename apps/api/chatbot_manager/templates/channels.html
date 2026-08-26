@@ -8,9 +8,9 @@
 </section>
 
 {% if saved %}
-<p class="alert alert-success">Channel saved successfully.</p>
+<p class="alert alert-success" role="status">Channel saved successfully.</p>
 {% elif error %}
-<p class="alert alert-error">{{ error }}</p>
+<p class="alert alert-error" role="alert">{{ error }}</p>
 {% endif %}
 
 <section class="grid">
@@ -21,13 +21,13 @@
     <h2>{{ card.display_name }}</h2>
     <div class="webhook-row">
       <code>{{ webhook_url }}</code>
-      <button class="copy-btn" data-copy="{{ webhook_url }}" title="Copy webhook URL">Copy</button>
+      <button type="button" class="copy-btn" data-copy="{{ webhook_url }}" aria-label="Copy {{ card.display_name }} webhook URL" title="Copy webhook URL">Copy</button>
     </div>
     <p>Status: {{ card.state | title }}</p>
     {% if is_telegram and telegram_webhook_active %}
     <div class="webhook-row">
       <code>{{ telegram_webhook_active }}</code>
-      <button class="copy-btn" data-copy="{{ telegram_webhook_active }}" title="Copy active webhook URL">Copy</button>
+      <button type="button" class="copy-btn" data-copy="{{ telegram_webhook_active }}" aria-label="Copy active Telegram webhook URL" title="Copy active webhook URL">Copy</button>
     </div>
     {% endif %}
     <form class="form-grid" method="post" action="/channels/{{ card.provider }}">
@@ -38,7 +38,7 @@
       </label>
       {% for field in card.masked %}
       <label class="wide">{{ field | replace("_", " ") | title }}
-        <input name="{{ field }}" type="password" placeholder="{{ card.masked[field] or 'Not set' }}">
+        <input name="{{ field }}" type="password" autocomplete="new-password" placeholder="{{ card.masked[field] or 'Not set' }}">
       </label>
       {% endfor %}
       <button type="submit">Save {{ card.display_name }}</button>
@@ -48,7 +48,7 @@
       {% if telegram_webhook_active %}
       <form method="post" action="/channels/telegram/disable-webhook">
         <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
-        <button class="danger-btn" onclick="return confirm('This will disable your live Telegram webhook and stop incoming messages. Continue?')">Disable Webhook</button>
+        <button type="submit" class="danger-btn" onclick="return confirm('This will disable your live Telegram webhook and stop incoming messages. Continue?')">Disable Webhook</button>
       </form>
       {% else %}
       <form method="post" action="/channels/telegram/setup-webhook">
