@@ -8,7 +8,7 @@ Date: 2026-08-26
 |---|---:|
 | P0 | 0 |
 | P1 | 0 |
-| P2 | 4 |
+| P2 | 3 |
 | P3 | 2 |
 
 
@@ -23,10 +23,28 @@ Fresh evidence is recorded in `docs/reviews/2026-08-26-phase-2-verification.md`.
 
 Phase 2 verification results:
 
-- Full suite: `123 passed`.
-- Focused negative-security suite: `26 passed`.
+- Full suite: `135 passed`.
+- Focused compatibility and security suite: `95 passed`.
 - Syntax compilation and `git diff --check`: clean.
 - Tracked Phase 2 diff credential-pattern scan: clean.
+
+
+## Phase 3 Closure
+
+Fresh evidence is recorded in `docs/reviews/2026-08-26-phase-3-verification.md`.
+
+| Status | Gaps |
+|---|---|
+| Completed in Phase 3 | GAP-011 |
+| Remaining for later phases | GAP-012, GAP-013, GAP-014, GAP-015, GAP-016 |
+
+Phase 3 verification results:
+
+- Full suite: `161 passed`.
+- Syntax compilation and `git diff --check`: clean.
+- LINE, Messenger, and Telegram mocked inbound-to-outbound flows verified.
+- Provider disabled/incomplete/ready/failed states verified.
+- GAP-011 escalation destination validation and notification outcomes verified.
 
 ## Ordered Gaps
 
