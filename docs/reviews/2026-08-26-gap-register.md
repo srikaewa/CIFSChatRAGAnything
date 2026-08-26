@@ -8,7 +8,7 @@ Date: 2026-08-26
 |---|---:|
 | P0 | 0 |
 | P1 | 0 |
-| P2 | 3 |
+| P2 | 2 |
 | P3 | 2 |
 
 
@@ -45,6 +45,24 @@ Phase 3 verification results:
 - LINE, Messenger, and Telegram mocked inbound-to-outbound flows verified.
 - Provider disabled/incomplete/ready/failed states verified.
 - GAP-011 escalation destination validation and notification outcomes verified.
+
+
+## Phase 4 Closure
+
+Fresh evidence is recorded in `docs/reviews/2026-08-26-phase-4-verification.md` and `docs/reviews/2026-08-26-phase-4-browser-verification.md`.
+
+| Status | Gaps |
+|---|---|
+| Completed in Phase 4 | GAP-012 |
+| Remaining for later phases | GAP-013, GAP-014, GAP-015, GAP-016 |
+
+Phase 4 verification results:
+
+- Focused graph suite: `42 passed`.
+- Full suite: `165 passed`.
+- Syntax compilation and `git diff --check`: clean.
+- Real browser Cytoscape render and controls verified.
+- Empty/error state cleanup, filtering, layout, details, truncation, and label-based one-hop expansion verified.
 
 ## Ordered Gaps
 
