@@ -4,12 +4,42 @@
 <form class="panel form-grid" method="post" action="/assistant">
   <label class="wide">System prompt <textarea name="system_prompt" rows="6">{{ settings.system_prompt }}</textarea></label>
   <label class="wide">Fallback reply <textarea name="fallback_reply" rows="3">{{ settings.fallback_reply }}</textarea></label>
-  <label><input type="checkbox" name="rag_enabled" {{ "checked" if settings.rag_enabled else "" }}> Use RAG-Anything fallback</label>
+  <label class="checkbox-label"><input type="checkbox" name="rag_enabled" {{ "checked" if settings.rag_enabled else "" }}> Use RAG-Anything fallback</label>
   <label class="wide">LLM base URL <input name="llm_base_url" value="{{ settings.llm_base_url }}" required></label>
   <label class="wide">LLM API key <input name="llm_api_key" type="password" placeholder="{{ masked_llm_api_key or 'Leave blank to keep current key' }}"></label>
-  <label>LLM model <input name="llm_model" value="{{ settings.llm_model }}"></label>
-  <label>Vision model <input name="vision_model" value="{{ settings.vision_model }}"></label>
-  <label>Embedding model <input name="embedding_model" value="{{ settings.embedding_model }}"></label>
+  <label>LLM model
+    <select name="llm_model">
+      {% for m in llm_models %}
+      <option value="{{ m }}" {{ "selected" if settings.llm_model == m else "" }}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Vision model
+    <select name="vision_model">
+      {% for m in vision_models %}
+      <option value="{{ m }}" {{ "selected" if settings.vision_model == m else "" }}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Embedding model
+    <select name="embedding_model">
+      {% for m in embedding_models %}
+      <option value="{{ m }}" {{ "selected" if settings.embedding_model == m else "" }}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <hr class="section-divider">
+  <h3 style="grid-column:1/-1;margin:0;font-size:0.9rem;color:var(--muted);font-weight:600;">Human escalation</h3>
+  <label>Notify channel
+    <select name="admin_notify_channel">
+      <option value="telegram" {{ "selected" if settings.admin_notify_channel == "telegram" else "" }}>Telegram</option>
+      <option value="" disabled>Messenger (coming soon)</option>
+      <option value="" disabled>LINE (coming soon)</option>
+    </select>
+  </label>
+  <label>Notify chat ID
+    <input name="admin_notify_chat_id" value="{{ settings.admin_notify_chat_id or '' }}" placeholder="Telegram chat ID (e.g. 123456789)">
+  </label>
   <button type="submit">Save assistant</button>
 </form>
 {% endblock %}

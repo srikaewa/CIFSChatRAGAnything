@@ -10,6 +10,7 @@
   <h2>Bot reply</h2>
   <p>{{ reply }}</p>
   <small>Source: {{ source }}</small>
+  {% if error %}<p class="alert alert-error">{{ error }}</p>{% endif %}
 </section>
 {% endif %}
 {% endblock %}

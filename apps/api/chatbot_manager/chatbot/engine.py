@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
 from inspect import isawaitable
 from typing import Any, Iterable
@@ -16,6 +18,9 @@ class ChatbotInput:
 class Decision:
     source: str
     reply_text: str
+    escalate: bool = False
+    rule_reply: str = ""
+    error: str = ""
 
 
 class ChatbotEngine:
@@ -43,15 +48,22 @@ class ChatbotEngine:
 
         for rule in sorted((rule for rule in rules if getattr(rule, "enabled", False)), key=lambda rule: rule.priority):
             if _rule_matches(rule, normalized_text):
-                return Decision(source="rule", reply_text=rule.reply_text)
+                escalate = getattr(rule, "escalate", False)
+                reply = rule.escalate_message if escalate and rule.escalate_message else rule.reply_text
+                return Decision(source="rule", reply_text=reply, escalate=escalate, rule_reply=rule.reply_text if escalate else "")
 
         if getattr(settings, "rag_enabled", False):
             try:
                 rag_reply = await self._answer_with_rag(incoming.text.strip(), getattr(settings, "system_prompt", ""))
-            except Exception:
+            except Exception as exc:
                 rag_reply = ""
+                error = str(exc)
+            else:
+                error = "RAG returned empty response" if not rag_reply.strip() else ""
             if rag_reply.strip():
                 return Decision(source="rag", reply_text=rag_reply.strip())
+            if error:
+                return Decision(source="fallback", reply_text=fallback_reply, error=error)
 
         return Decision(source="fallback", reply_text=fallback_reply)
 
@@ -67,13 +79,46 @@ def _normalize(text: str) -> str:
 
 
 def _rule_matches(rule: Any, normalized_text: str) -> bool:
-    normalized_pattern = _normalize(getattr(rule, "pattern", ""))
-    if not normalized_pattern:
+    def _condition(pattern: str, match_type: str) -> bool:
+        np = _normalize(pattern)
+        if not np:
+            return False
+        mt = _normalize(match_type)
+        if mt == "exact":
+            return normalized_text == np
+        if mt == "contains":
+            return np in normalized_text
+        if mt == "regex":
+            try:
+                return re.search(np, normalized_text) is not None
+            except re.error:
+                return False
+        if mt == "starts_with":
+            return normalized_text.startswith(np)
+        if mt == "ends_with":
+            return normalized_text.endswith(np)
+        if mt == "all_words":
+            words = np.split()
+            return all(word in normalized_text for word in words)
+        if mt == "any_word":
+            words = np.split()
+            return any(word in normalized_text for word in words)
         return False
 
-    match_type = _normalize(getattr(rule, "match_type", "contains"))
-    if match_type == "exact":
-        return normalized_text == normalized_pattern
-    if match_type == "contains":
-        return normalized_pattern in normalized_text
-    return False
+    results = []
+    primary = _condition(getattr(rule, "pattern", ""), getattr(rule, "match_type", "contains"))
+    results.append(primary)
+
+    extra_raw = getattr(rule, "conditions", "[]")
+    if extra_raw:
+        try:
+            extra = json.loads(extra_raw) if isinstance(extra_raw, str) else extra_raw
+            for cond in extra:
+                results.append(_condition(cond.get("pattern", ""), cond.get("match_type", "contains")))
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            pass
+
+    if not results or not any(results):
+        return False
+    logic = getattr(rule, "condition_logic", "and")
+    return all(results) if logic == "and" else any(results)

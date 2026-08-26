@@ -1,12 +1,17 @@
 {% extends "base.html" %}
+
 {% block content %}
 <section class="page-head">
   <h1>Dashboard</h1>
-  <p>Manage LINE, Messenger, rules, knowledge, and test replies before going live.</p>
+  <p>Manage LINE, Messenger, Telegram, rules, knowledge, and test replies before going live.</p>
 </section>
 <section class="grid">
-  <article class="panel"><h2>LINE</h2><p>{{ "Configured" if settings.line_channel_access_token else "Needs token" }}</p></article>
-  <article class="panel"><h2>Messenger</h2><p>{{ "Configured" if settings.messenger_page_access_token else "Needs token" }}</p></article>
+  {% for channel in channel_cards %}
+  <article class="panel">
+    <h2>{{ channel.display_name }}</h2>
+    <p>{{ "Configured" if channel.configured else "Needs token" }}</p>
+  </article>
+  {% endfor %}
   <article class="panel"><h2>RAG</h2><p>{{ settings.rag_backend }}</p></article>
 </section>
 {% endblock %}

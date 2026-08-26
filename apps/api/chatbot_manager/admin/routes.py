@@ -1,15 +1,18 @@
+import json
 from pathlib import Path
 from pathlib import PurePath
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
+from chatbot_manager.channel_config import CHANNEL_DEFINITIONS, channel_cards, channel_credentials, get_channel, save_channel, update_channel_credentials
 from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput
 from chatbot_manager.db import get_session
 from chatbot_manager.models import AssistantSettings, ChatEvent, KnowledgeDocument, Rule, utc_now
-from chatbot_manager.rag.service import RagAnythingService
+from chatbot_manager.channels.telegram import TelegramAdapter
+from chatbot_manager.rag.service import rag_service_from_assistant
 from chatbot_manager.security import make_session_token, mask_secret, read_session_token, verify_admin
 from chatbot_manager.settings import get_settings
 
@@ -19,6 +22,7 @@ SUPPORTED_KNOWLEDGE_EXTENSIONS = {
     ".bmp",
     ".doc",
     ".docx",
+    ".gif",
     ".jpeg",
     ".jpg",
     ".md",
@@ -26,10 +30,31 @@ SUPPORTED_KNOWLEDGE_EXTENSIONS = {
     ".png",
     ".ppt",
     ".pptx",
+    ".tiff",
     ".txt",
+    ".webp",
     ".xls",
     ".xlsx",
 }
+
+LLM_MODELS = [
+    "gpt-5.5", "gpt-5.4", "gpt-5.3", "gpt-5.2", "gpt-5.1", "gpt-5",
+    "gpt-5-mini", "gpt-5-nano",
+    "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+    "gpt-4o", "gpt-4o-mini",
+    "o3", "o3-mini", "o4-mini", "o1",
+]
+
+VISION_MODELS = [
+    "gpt-5.5", "gpt-5.4", "gpt-5.3", "gpt-5.2", "gpt-5.1", "gpt-5",
+    "gpt-4o", "gpt-4o-mini",
+    "o3", "o4-mini",
+    "gpt-image-2.0",
+]
+
+EMBEDDING_MODELS = [
+    "text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002",
+]
 
 
 def require_admin(request: Request) -> str:
@@ -61,7 +86,11 @@ def logout() -> Response:
 
 
 @router.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, admin_email: str = Depends(require_admin)) -> Response:
+def dashboard(
+    request: Request,
+    admin_email: str = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
     settings = get_settings()
     return templates.TemplateResponse(
         request,
@@ -70,24 +99,147 @@ def dashboard(request: Request, admin_email: str = Depends(require_admin)) -> Re
             "admin_email": admin_email,
             "settings": settings,
             "active_page": "dashboard",
+            "channel_cards": channel_cards(session, settings),
         },
     )
 
 
 @router.get("/channels", response_class=HTMLResponse)
-def channels_page(request: Request, admin_email: str = Depends(require_admin)) -> Response:
+def channels_page(
+    request: Request,
+    saved: str | None = None,
+    error: str | None = None,
+    admin_email: str = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
     settings = get_settings()
+    cards = channel_cards(session, settings)
+    telegram_card = next((c for c in cards if c["provider"] == "telegram"), {})
+    base_url = settings.api_public_url
     return templates.TemplateResponse(
         request,
         "channels.html",
         {
             "admin_email": admin_email,
             "active_page": "channels",
-            "settings": settings,
-            "line_webhook": f"{settings.api_public_url}/webhooks/line",
-            "messenger_webhook": f"{settings.api_public_url}/webhooks/messenger",
+            "channel_cards": cards,
+            "webhook_urls": {c["provider"]: f"{base_url}/webhooks/{c['provider']}" for c in cards},
+            "telegram_webhook_active": telegram_card.get("credentials", {}).get("webhook_url", ""),
+            "saved": saved == "1",
+            "error": error or "",
         },
     )
+
+
+@router.post("/channels/{provider}")
+def update_channel(
+    provider: str,
+    enabled: str | None = Form(None),
+    channel_secret: str = Form(""),
+    channel_access_token: str = Form(""),
+    verify_token: str = Form(""),
+    page_access_token: str = Form(""),
+    app_secret: str = Form(""),
+    bot_token: str = Form(""),
+    webhook_secret: str = Form(""),
+    admin_email: str = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    if provider not in CHANNEL_DEFINITIONS:
+        raise HTTPException(status_code=404, detail="Unknown channel")
+    try:
+        save_channel(
+            session,
+            provider=provider,
+            enabled=enabled == "on",
+            incoming_credentials={
+                "channel_secret": channel_secret,
+                "channel_access_token": channel_access_token,
+                "verify_token": verify_token,
+                "page_access_token": page_access_token,
+                "app_secret": app_secret,
+                "bot_token": bot_token,
+                "webhook_secret": webhook_secret,
+            },
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/channels?error={exc}", status_code=303)
+    return RedirectResponse("/channels?saved=1", status_code=303)
+
+
+@router.post("/channels/telegram/setup-webhook")
+async def telegram_setup_webhook(
+    request: Request,
+    admin_email: str = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    settings = get_settings()
+    channel = get_channel(session, "telegram")
+    if channel is None:
+        return RedirectResponse("/channels?error=Save+Telegram+channel+credentials+first", status_code=303)
+    credentials = channel_credentials(session, settings, "telegram")
+    if not credentials.get("bot_token"):
+        return RedirectResponse("/channels?error=Telegram+bot+token+is+not+configured", status_code=303)
+    adapter = TelegramAdapter(credentials["bot_token"], credentials["webhook_secret"])
+    import subprocess, json
+    try:
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return RedirectResponse(f"/channels?error=Tailscale+status+failed", status_code=303)
+        ts_status = json.loads(result.stdout)
+        dns_name = ts_status.get("Self", {}).get("DNSName", "")
+        if not dns_name:
+            return RedirectResponse(f"/channels?error=Could+not+determine+Tailscale+DNS+name", status_code=303)
+        funnel_host = dns_name.rstrip(".")
+    except FileNotFoundError:
+        return RedirectResponse(f"/channels?error=Tailscale+CLI+not+found", status_code=303)
+    except json.JSONDecodeError:
+        return RedirectResponse(f"/channels?error=Invalid+Tailscale+status+output", status_code=303)
+    port = settings.api_public_url.split(":")[-1] if ":" in settings.api_public_url else "8000"
+    funnel_url = f"https://{funnel_host}/webhooks/telegram"
+    funnel_result = subprocess.run(
+        ["sudo", "tailscale", "funnel", "--bg", port],
+        capture_output=True, text=True, timeout=15,
+    )
+    if funnel_result.returncode != 0:
+        detail = funnel_result.stderr.strip()
+        if "Access denied" in detail:
+            return RedirectResponse(f"/channels?error=Tailscale+funnel+failed:+Access+denied.+Run+sudo+tailscale+set+--operator=$USER", status_code=303)
+        return RedirectResponse(f"/channels?error=Tailscale+funnel+failed", status_code=303)
+    wh_result = await adapter.set_webhook(funnel_url)
+    if not wh_result.get("ok"):
+        return RedirectResponse(f"/channels?error=Telegram+setWebhook+failed", status_code=303)
+    update_channel_credentials(session, "telegram", {"webhook_url": funnel_url})
+    return RedirectResponse("/channels", status_code=303)
+
+
+@router.post("/channels/telegram/disable-webhook")
+async def telegram_disable_webhook(
+    request: Request,
+    admin_email: str = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    settings = get_settings()
+    credentials = channel_credentials(session, settings, "telegram")
+    if not credentials.get("bot_token"):
+        return RedirectResponse("/channels?error=Telegram+bot+token+is+not+configured", status_code=303)
+    adapter = TelegramAdapter(credentials["bot_token"], credentials["webhook_secret"])
+    wh_result = await adapter.delete_webhook()
+    if not wh_result.get("ok"):
+        return RedirectResponse(f"/channels?error=Telegram+deleteWebhook+failed", status_code=303)
+    import subprocess
+    port = settings.dashboard_url.split(":")[-1] if ":" in settings.dashboard_url else "8000"
+    subprocess.run(
+        ["sudo", "tailscale", "funnel", "off", port],
+        capture_output=True, text=True, timeout=15,
+    )
+    update_channel_credentials(session, "telegram", {"webhook_url": ""})
+    return RedirectResponse("/channels", status_code=303)
+
+
 
 
 def assistant_settings(session: Session) -> AssistantSettings:
@@ -100,22 +252,11 @@ def assistant_settings(session: Session) -> AssistantSettings:
     return settings
 
 
-def rag_service_from_assistant(settings: AssistantSettings) -> RagAnythingService:
-    app_settings = get_settings()
-    return RagAnythingService(
-        llm_base_url=settings.llm_base_url or app_settings.llm_base_url,
-        llm_api_key=settings.llm_api_key or app_settings.llm_api_key,
-        llm_model=settings.llm_model or app_settings.llm_default_model,
-        vision_model=settings.vision_model or app_settings.llm_vision_model,
-        embedding_model=settings.embedding_model or app_settings.llm_embedding_model,
-    )
-
-
 def clamp_query_value(value: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(value, maximum))
 
 
-def normalize_graph_response(graph: dict[str, object], center_node_id: str, depth: int) -> dict[str, object]:
+def normalize_graph_response(graph: dict[str, object], center_node_id: str | None, depth: int) -> dict[str, object]:
     raw_nodes = graph.get("nodes", [])
     raw_edges = graph.get("edges", [])
     nodes = raw_nodes if isinstance(raw_nodes, list) else []
@@ -170,13 +311,13 @@ def normalize_graph_response(graph: dict[str, object], center_node_id: str, dept
 
     warnings: list[str] = []
     if not normalized_nodes:
-        warnings.append("No graph nodes found for this label.")
+        warnings.append("No graph nodes found." if center_node_id is None else "No graph nodes found for this label.")
     if bool(graph.get("is_truncated", False)):
-        warnings.append("Graph result was truncated. Use filters to narrow view.")
+        warnings.append("Graph truncated. Increase node limit or use focused mode.")
 
     return {
         "graph_type": "concept_graph",
-        "center_node_id": center_node_id,
+            "center_node_id": center_node_id,
         "depth": depth,
         "nodes": normalized_nodes,
         "edges": normalized_edges,
@@ -201,27 +342,114 @@ def rag_doc_id_for(document: KnowledgeDocument) -> str:
 @router.get("/rules", response_class=HTMLResponse)
 def rules_page(
     request: Request,
+    edit: int | None = None,
     admin_email: str = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Response:
     rules = session.exec(select(Rule).order_by(Rule.priority)).all()
+    editing_rule = session.get(Rule, edit) if edit else None
+    extra_conditions = []
+    if editing_rule and editing_rule.conditions:
+        try:
+            extra_conditions = json.loads(editing_rule.conditions)
+        except (json.JSONDecodeError, TypeError):
+            extra_conditions = []
     return templates.TemplateResponse(
         request,
         "rules.html",
-        {"admin_email": admin_email, "active_page": "rules", "rules": rules},
+        {
+            "admin_email": admin_email,
+            "active_page": "rules",
+            "rules": rules,
+            "editing_rule": editing_rule,
+            "extra_conditions": extra_conditions,
+        },
     )
+
+
+def _parse_extra_conditions(
+    cond_pattern: list[str],
+    cond_match_type: list[str],
+) -> str:
+    extra = []
+    for i in range(len(cond_pattern)):
+        p = cond_pattern[i].strip()
+        if p:
+            mt = cond_match_type[i] if i < len(cond_match_type) else "contains"
+            extra.append({"pattern": p, "match_type": mt})
+    return json.dumps(extra)
 
 
 @router.post("/rules")
 def create_rule(
     pattern: str = Form(...),
     match_type: str = Form(...),
+    condition_logic: str = Form("and"),
+    cond_pattern: list[str] = Form([]),
+    cond_match_type: list[str] = Form([]),
     reply_text: str = Form(...),
     priority: int = Form(100),
+    escalate: str | None = Form(None),
+    escalate_message: str = Form(""),
     admin_email: str = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Response:
-    session.add(Rule(pattern=pattern, match_type=match_type, reply_text=reply_text, priority=priority))
+    session.add(Rule(
+        pattern=pattern,
+        match_type=match_type,
+        condition_logic=condition_logic,
+        conditions=_parse_extra_conditions(cond_pattern, cond_match_type),
+        reply_text=reply_text,
+        priority=priority,
+        escalate=escalate == "on",
+        escalate_message=escalate_message,
+    ))
+    session.commit()
+    return RedirectResponse("/rules", status_code=303)
+
+
+@router.post("/rules/{rule_id}/update")
+def update_rule(
+    rule_id: int,
+    pattern: str = Form(...),
+    match_type: str = Form(...),
+    condition_logic: str = Form("and"),
+    cond_pattern: list[str] = Form([]),
+    cond_match_type: list[str] = Form([]),
+    reply_text: str = Form(...),
+    priority: int = Form(100),
+    escalate: str | None = Form(None),
+    escalate_message: str = Form(""),
+    admin_email: str = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    rule = session.get(Rule, rule_id)
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    rule.pattern = pattern
+    rule.match_type = match_type
+    rule.condition_logic = condition_logic
+    rule.conditions = _parse_extra_conditions(cond_pattern, cond_match_type)
+    rule.reply_text = reply_text
+    rule.priority = priority
+    rule.escalate = escalate == "on"
+    rule.escalate_message = escalate_message
+    rule.updated_at = utc_now()
+    session.add(rule)
+    session.commit()
+    return RedirectResponse("/rules", status_code=303)
+
+
+@router.post("/rules/{rule_id}/delete")
+def delete_rule(
+    rule_id: int,
+    admin_email: str = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    rule = session.get(Rule, rule_id)
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    session.delete(rule)
     session.commit()
     return RedirectResponse("/rules", status_code=303)
 
@@ -241,6 +469,9 @@ def assistant_page(
             "active_page": "assistant",
             "settings": settings,
             "masked_llm_api_key": mask_secret(settings.llm_api_key),
+            "llm_models": LLM_MODELS,
+            "vision_models": VISION_MODELS,
+            "embedding_models": EMBEDDING_MODELS,
         },
     )
 
@@ -255,6 +486,8 @@ def update_assistant(
     llm_model: str = Form(...),
     vision_model: str = Form(...),
     embedding_model: str = Form(...),
+    admin_notify_channel: str = Form("telegram"),
+    admin_notify_chat_id: str = Form(""),
     admin_email: str = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Response:
@@ -268,6 +501,8 @@ def update_assistant(
     settings.llm_model = llm_model
     settings.vision_model = vision_model
     settings.embedding_model = embedding_model
+    settings.admin_notify_channel = admin_notify_channel
+    settings.admin_notify_chat_id = admin_notify_chat_id
     settings.updated_at = utc_now()
     session.add(settings)
     session.commit()
@@ -305,6 +540,7 @@ async def test_chat_submit(
             incoming_text=message,
             decision_source=decision.source,
             reply_text=decision.reply_text,
+            error=decision.error,
         )
     )
     session.commit()
@@ -317,6 +553,7 @@ async def test_chat_submit(
             "message": message,
             "reply": decision.reply_text,
             "source": decision.source,
+            "error": decision.error,
         },
     )
 
@@ -406,31 +643,34 @@ def knowledge_graph_page(request: Request, admin_email: str = Depends(require_ad
             "active_page": "knowledge_graph",
             "default_label": "Product",
             "default_max_depth": 2,
-            "default_max_nodes": 120,
+            "default_max_nodes": 200,
         },
     )
 
 
 @router.get("/api/knowledge-graph")
 async def knowledge_graph_api(
-    label: str,
+    label: str = "",
+    mode: str = "local",
     max_depth: int = 2,
-    max_nodes: int = 120,
+    max_nodes: int = 200,
     admin_email: str = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
-    graph_label = label.strip()
-    if not graph_label:
-        raise HTTPException(status_code=400, detail="Graph label is required.")
-
     settings = assistant_settings(session)
-    depth = clamp_query_value(max_depth, 1, 5)
+    graph_mode = mode.strip().lower() or "local"
+    node_limit = clamp_query_value(max_nodes, 1, 500)
     try:
-        graph = await rag_service_from_assistant(settings).knowledge_graph(
-            label=graph_label,
-            max_depth=depth,
-            max_nodes=clamp_query_value(max_nodes, 1, 500),
-        )
+        graph_service = rag_service_from_assistant(settings)
+        if graph_mode == "all":
+            graph = await graph_service.knowledge_graph_all(max_nodes=node_limit)
+            return normalize_graph_response(graph, center_node_id=None, depth=0)
+
+        graph_label = label.strip()
+        if not graph_label:
+            raise HTTPException(status_code=400, detail="Graph label is required in focused mode.")
+        depth = clamp_query_value(max_depth, 1, 5)
+        graph = await graph_service.knowledge_graph(label=graph_label, max_depth=depth, max_nodes=node_limit)
         return normalize_graph_response(graph, center_node_id=graph_label, depth=depth)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -451,26 +691,32 @@ async def knowledge_graph_labels_api(
 @router.post("/knowledge")
 async def upload_knowledge(
     background_tasks: BackgroundTasks,
-    file: UploadFile,
+    files: list[UploadFile] = File(...),
     admin_email: str = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Response:
     settings = get_settings()
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
-    filename = PurePath(file.filename or "upload.bin").name
-    if Path(filename).suffix.lower() not in SUPPORTED_KNOWLEDGE_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Unsupported file type")
-    target = settings.upload_dir / filename
-    target.write_bytes(await file.read())
 
-    document = KnowledgeDocument(filename=filename, path=str(target), status="pending")
-    session.add(document)
-    session.commit()
-    session.refresh(document)
-    document.rag_doc_id = rag_doc_id_for(document)
-    session.add(document)
-    session.commit()
-    background_tasks.add_task(index_document_task, document.id, str(target))
+    for file in files:
+        if not file.filename:
+            continue
+        filename = PurePath(file.filename).name
+        if Path(filename).suffix.lower() not in SUPPORTED_KNOWLEDGE_EXTENSIONS:
+            continue
+
+        target = settings.upload_dir / filename
+        target.write_bytes(await file.read())
+
+        document = KnowledgeDocument(filename=filename, path=str(target), status="pending")
+        session.add(document)
+        session.commit()
+        session.refresh(document)
+        document.rag_doc_id = rag_doc_id_for(document)
+        session.add(document)
+        session.commit()
+        background_tasks.add_task(index_document_task, document.id, str(target))
+
     return RedirectResponse("/knowledge", status_code=303)
 
 
@@ -493,4 +739,29 @@ def reindex_knowledge(
     session.add(document)
     session.commit()
     background_tasks.add_task(index_document_task, document.id, document.path, True)
+    return RedirectResponse("/knowledge", status_code=303)
+
+
+@router.post("/knowledge/{document_id}/delete")
+async def delete_knowledge(
+    document_id: int,
+    admin_email: str = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    document = session.get(KnowledgeDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Knowledge document not found")
+
+    settings = assistant_settings(session)
+    rag_service = rag_service_from_assistant(settings)
+    try:
+        await rag_service.delete_document(document.rag_doc_id)
+    except Exception:
+        pass
+
+    if document.path:
+        Path(document.path).unlink(missing_ok=True)
+
+    session.delete(document)
+    session.commit()
     return RedirectResponse("/knowledge", status_code=303)

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from inspect import isawaitable
-from typing import Any, Protocol
+from typing import Any, Protocol, TYPE_CHECKING
 
 from chatbot_manager.settings import Settings
+
+if TYPE_CHECKING:
+    from chatbot_manager.models import AssistantSettings
 
 
 class RagService:
@@ -24,6 +27,17 @@ class FakeRagService(RagService):
 
     async def answer(self, question: str, system_prompt: str) -> str:
         return self.answer_text
+
+
+def rag_service_from_assistant(settings: AssistantSettings) -> RagAnythingService:
+    app_settings = Settings()
+    return RagAnythingService(
+        llm_base_url=settings.llm_base_url or app_settings.llm_base_url,
+        llm_api_key=settings.llm_api_key or app_settings.llm_api_key,
+        llm_model=settings.llm_model or app_settings.llm_default_model,
+        vision_model=settings.vision_model or app_settings.llm_vision_model,
+        embedding_model=settings.embedding_model or app_settings.llm_embedding_model,
+    )
 
 
 class RagAnythingService(RagService):
@@ -84,10 +98,18 @@ class RagAnythingService(RagService):
         await self._raise_if_graph_available_and_empty(client)
 
     async def answer(self, question: str, system_prompt: str) -> str:
-        result = await self.client().aquery(question, mode="hybrid", system_prompt=system_prompt)
-        return result.strip()
+        client = self.client()
+        await self._ensure_lightrag_initialized(client)
+        result = await client.aquery(question, mode="hybrid", system_prompt=system_prompt, vlm_enhanced=False)
+        return (result or "").strip()
 
     async def knowledge_graph(self, label: str, max_depth: int, max_nodes: int) -> dict[str, Any]:
+        return await self._knowledge_graph(label=label, max_depth=max_depth, max_nodes=max_nodes)
+
+    async def knowledge_graph_all(self, max_nodes: int) -> dict[str, Any]:
+        return await self._knowledge_graph(label="*", max_depth=0, max_nodes=max_nodes)
+
+    async def _knowledge_graph(self, label: str, max_depth: int, max_nodes: int) -> dict[str, Any]:
         client = self.client()
         graph_getter = getattr(client, "get_knowledge_graph", None)
         if not callable(graph_getter):
@@ -101,6 +123,14 @@ class RagAnythingService(RagService):
         if isawaitable(result):
             result = await result
         return self._normalize_knowledge_graph(result)
+
+    async def delete_document(self, rag_doc_id: str | None) -> None:
+        if not rag_doc_id:
+            return
+        client = self.client()
+        await self._ensure_lightrag_initialized(client)
+        await self._delete_stale_document_records(client, "", rag_doc_id)
+        await self._finalize_client(client)
 
     async def entity_labels(self) -> list[str]:
         client = self.client()
@@ -265,6 +295,7 @@ class RagAnythingService(RagService):
                 model=self.embedding_model,
                 base_url=self.llm_base_url,
                 api_key=self.llm_api_key,
+                embedding_dim=1536,
             )
 
         embedding_func = EmbeddingFunc(

@@ -12,6 +12,7 @@ class DummyRag:
         self.answer = answer
         self.process_calls: list[dict[str, object]] = []
         self.query_calls: list[dict[str, str | None]] = []
+        self.graph_calls: list[dict[str, object]] = []
         self.finalize_calls = 0
 
     async def process_document_complete(self, file_path: str, output_dir: str, parse_method: str, **kwargs: object) -> None:
@@ -27,11 +28,12 @@ class DummyRag:
     async def finalize_storages(self) -> None:
         self.finalize_calls += 1
 
-    async def aquery(self, question: str, mode: str = "hybrid", system_prompt: str | None = None) -> str:
+    async def aquery(self, question: str, mode: str = "hybrid", system_prompt: str | None = None, **kwargs: object) -> str:
         self.query_calls.append({"question": question, "mode": mode, "system_prompt": system_prompt})
         return self.answer
 
     async def get_knowledge_graph(self, node_label: str, max_depth: int, max_nodes: int):
+        self.graph_calls.append({"node_label": node_label, "max_depth": max_depth, "max_nodes": max_nodes})
         return {
             "nodes": [
                 {"id": "product", "labels": ["Product"], "properties": {"description": "Main product"}},
@@ -257,6 +259,18 @@ async def test_knowledge_graph_normalizes_client_graph(tmp_path: Path) -> None:
         ],
         "is_truncated": False,
     }
+    assert dummy.graph_calls == [{"node_label": "Product", "max_depth": 2, "max_nodes": 50}]
+
+
+@pytest.mark.asyncio
+async def test_knowledge_graph_all_uses_star_label(tmp_path: Path) -> None:
+    dummy = DummyRag()
+    service = RagAnythingService(settings=Settings(rag_working_dir=tmp_path / "rag-work"), rag_client=dummy)
+
+    graph = await service.knowledge_graph_all(max_nodes=200)
+
+    assert graph["nodes"][0] == {"id": "product", "label": "Product", "properties": {"description": "Main product"}}
+    assert dummy.graph_calls == [{"node_label": "*", "max_depth": 0, "max_nodes": 200}]
 
 
 @pytest.mark.asyncio

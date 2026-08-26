@@ -13,7 +13,8 @@ dependencies = [
   "itsdangerous>=2.2.0",
   "pwdlib[argon2]>=0.2.1",
   "pydantic-settings>=2.4.0",
-  "raganything>=1.0.0"
+  "raganything>=1.0.0",
+  "python-telegram-bot>=21.0"
 ]
 
 [dependency-groups]

@@ -97,6 +97,108 @@ async def test_empty_input_uses_fallback_without_rag() -> None:
 
 
 @pytest.mark.asyncio
+async def test_and_conditions_all_must_match() -> None:
+    engine = ChatbotEngine(FakeRagService(answer="rag reply"))
+    settings = AssistantSettings()
+    rules = [Rule(
+        priority=1, match_type="contains", pattern="price",
+        condition_logic="and", conditions='[{"pattern": "quote", "match_type": "contains"}]',
+        reply_text="Price quote reply.",
+    )]
+
+    decision = await engine.answer(ChatbotInput("price quote", "line", "u1"), rules, settings)
+    assert decision.source == "rule"
+    assert decision.reply_text == "Price quote reply."
+
+
+@pytest.mark.asyncio
+async def test_and_conditions_partial_match_fails() -> None:
+    engine = ChatbotEngine(FakeRagService(answer="rag reply"))
+    settings = AssistantSettings(rag_enabled=True)
+    rules = [Rule(
+        priority=1, match_type="contains", pattern="price",
+        condition_logic="and", conditions='[{"pattern": "quote", "match_type": "contains"}]',
+        reply_text="Price quote reply.",
+    )]
+
+    decision = await engine.answer(ChatbotInput("price only", "line", "u2"), rules, settings)
+    assert decision.source == "rag"
+
+
+@pytest.mark.asyncio
+async def test_or_conditions_any_match_suffices() -> None:
+    engine = ChatbotEngine(FakeRagService(answer="rag reply"))
+    settings = AssistantSettings()
+    rules = [Rule(
+        priority=1, match_type="contains", pattern="price",
+        condition_logic="or", conditions='[{"pattern": "quote", "match_type": "contains"}]',
+        reply_text="Price or quote reply.",
+    )]
+
+    decision = await engine.answer(ChatbotInput("need a quote", "line", "u3"), rules, settings)
+    assert decision.source == "rule"
+    assert decision.reply_text == "Price or quote reply."
+
+
+@pytest.mark.asyncio
+async def test_or_conditions_neither_match_fails() -> None:
+    engine = ChatbotEngine(FakeRagService(answer="rag reply"))
+    settings = AssistantSettings(rag_enabled=True)
+    rules = [Rule(
+        priority=1, match_type="contains", pattern="price",
+        condition_logic="or", conditions='[{"pattern": "quote", "match_type": "contains"}]',
+        reply_text="Price or quote reply.",
+    )]
+
+    decision = await engine.answer(ChatbotInput("hello there", "line", "u4"), rules, settings)
+    assert decision.source == "rag"
+
+
+@pytest.mark.asyncio
+async def test_mixed_match_types_in_conditions() -> None:
+    engine = ChatbotEngine(FakeRagService(answer="rag reply"))
+    settings = AssistantSettings()
+    rules = [Rule(
+        priority=1, match_type="starts_with", pattern="hi",
+        condition_logic="and", conditions='[{"pattern": "bye", "match_type": "ends_with"}]',
+        reply_text="Mixed match reply.",
+    )]
+
+    decision = await engine.answer(ChatbotInput("hi there goodbye", "line", "u5"), rules, settings)
+    assert decision.source == "rule"
+    assert decision.reply_text == "Mixed match reply."
+
+
+@pytest.mark.asyncio
+async def test_empty_extra_conditions_backward_compat() -> None:
+    engine = ChatbotEngine(FakeRagService(answer="rag reply"))
+    settings = AssistantSettings()
+    rules = [Rule(
+        priority=1, match_type="exact", pattern="hello",
+        conditions="[]", reply_text="Hello reply.",
+    )]
+
+    decision = await engine.answer(ChatbotInput("  HELLO ", "line", "u6"), rules, settings)
+    assert decision.source == "rule"
+    assert decision.reply_text == "Hello reply."
+
+
+@pytest.mark.asyncio
+async def test_multi_condition_with_regex_and_contains() -> None:
+    engine = ChatbotEngine(FakeRagService(answer="rag reply"))
+    settings = AssistantSettings()
+    rules = [Rule(
+        priority=1, match_type="regex", pattern="\\bprice\\b",
+        condition_logic="and", conditions='[{"pattern": "total", "match_type": "contains"}]',
+        reply_text="Regex+contains reply.",
+    )]
+
+    decision = await engine.answer(ChatbotInput("what is the price total", "line", "u7"), rules, settings)
+    assert decision.source == "rule"
+    assert decision.reply_text == "Regex+contains reply."
+
+
+@pytest.mark.asyncio
 async def test_base_rag_service_requires_concrete_implementation() -> None:
     with pytest.raises(NotImplementedError):
         await RagService().answer("question", "prompt")

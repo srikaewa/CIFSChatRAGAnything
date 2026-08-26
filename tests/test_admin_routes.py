@@ -1,10 +1,12 @@
+import json
+
 from fastapi.testclient import TestClient
 import pytest
 from sqlmodel import Session
 
 from chatbot_manager.admin.routes import index_document_task, rag_service_from_assistant
 from chatbot_manager.db import get_engine
-from chatbot_manager.models import AssistantSettings, KnowledgeDocument
+from chatbot_manager.models import AssistantSettings, Channel, KnowledgeDocument
 from chatbot_manager.settings import get_settings
 
 
@@ -122,7 +124,7 @@ def test_knowledge_page_loads(client: TestClient) -> None:
     response = client.get("/knowledge")
 
     assert response.status_code == 200
-    assert "Upload document" in response.text
+    assert "Upload documents" in response.text
 
 
 def test_knowledge_upload_records_document(client: TestClient, monkeypatch) -> None:
@@ -134,7 +136,7 @@ def test_knowledge_upload_records_document(client: TestClient, monkeypatch) -> N
 
     response = client.post(
         "/knowledge",
-        files={"file": ("menu.txt", b"Menu content", "text/plain")},
+        files=[("files", ("menu.txt", b"Menu content", "text/plain"))],
         follow_redirects=False,
     )
 
@@ -151,7 +153,7 @@ def test_knowledge_status_api_returns_documents(client: TestClient, monkeypatch)
     login(client)
     client.post(
         "/knowledge",
-        files={"file": ("menu.txt", b"Menu content", "text/plain")},
+        files=[("files", ("menu.txt", b"Menu content", "text/plain"))],
         follow_redirects=False,
     )
 
@@ -173,7 +175,7 @@ def test_knowledge_document_can_be_reindexed(client: TestClient, monkeypatch) ->
     login(client)
     client.post(
         "/knowledge",
-        files={"file": ("menu.txt", b"Menu content", "text/plain")},
+        files=[("files", ("menu.txt", b"Menu content", "text/plain"))],
         follow_redirects=False,
     )
 
@@ -230,16 +232,18 @@ async def test_index_document_task_uses_reindex_mode(client: TestClient, monkeyp
     assert calls == [("data/uploads/menu.txt", "knowledge-9")]
 
 
-def test_knowledge_upload_rejects_unsupported_file_type(client: TestClient) -> None:
+def test_knowledge_upload_skips_unsupported_file_type(client: TestClient) -> None:
     login(client)
 
     response = client.post(
         "/knowledge",
-        files={"file": ("script.exe", b"bad", "application/octet-stream")},
+        files=[("files", ("script.exe", b"bad", "application/octet-stream"))],
+        follow_redirects=False,
     )
 
-    assert response.status_code == 400
-    assert "Unsupported file type" in response.text
+    assert response.status_code == 303
+    page = client.get("/knowledge")
+    assert "script.exe" not in page.text
 
 
 def test_knowledge_graph_page_requires_login(client: TestClient) -> None:
@@ -256,12 +260,15 @@ def test_knowledge_graph_page_loads(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert "Knowledge Graph" in response.text
+    assert 'id="graph-mode-select"' in response.text
+    assert 'value="all"' in response.text
     assert '<select id="entity-label-select" name="label" required>' in response.text
     assert '<script src="/static/vendor/cytoscape.min.js"></script>' in response.text
     assert 'id="graph-layout-select"' in response.text
     assert 'id="graph-search"' in response.text
     assert 'id="graph-node-type-filter"' in response.text
     assert 'id="graph-canvas"' in response.text
+    assert "function graphErrorMessage(" in response.text
 
 
 def test_knowledge_graph_labels_api_returns_labels(client: TestClient, monkeypatch) -> None:
@@ -331,6 +338,47 @@ def test_knowledge_graph_api_returns_graph(client: TestClient, monkeypatch) -> N
     }
 
 
+def test_knowledge_graph_api_returns_all_graph(client: TestClient, monkeypatch) -> None:
+    class FakeGraphService:
+        async def knowledge_graph_all(self, max_nodes: int):
+            return {
+                "nodes": [
+                    {"id": "DNA", "label": "DNA", "properties": {}},
+                    {"id": "STR", "label": "STR", "properties": {}},
+                ],
+                "edges": [
+                    {"id": "dna-str", "source": "DNA", "target": "STR", "type": "RELATED", "properties": {}}
+                ],
+                "is_truncated": True,
+            }
+
+    monkeypatch.setattr("chatbot_manager.admin.routes.rag_service_from_assistant", lambda settings: FakeGraphService())
+    login(client)
+
+    response = client.get("/api/knowledge-graph", params={"mode": "all", "max_nodes": "200"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["center_node_id"] is None
+    assert payload["depth"] == 0
+    assert payload["stats"]["node_count"] == 2
+    assert payload["warnings"] == ["Graph truncated. Increase node limit or use focused mode."]
+
+
+def test_knowledge_graph_api_local_mode_requires_label(client: TestClient, monkeypatch) -> None:
+    class FakeGraphService:
+        async def knowledge_graph(self, label: str, max_depth: int, max_nodes: int):
+            return {"nodes": [], "edges": [], "is_truncated": False}
+
+    monkeypatch.setattr("chatbot_manager.admin.routes.rag_service_from_assistant", lambda settings: FakeGraphService())
+    login(client)
+
+    response = client.get("/api/knowledge-graph", params={"mode": "local", "label": ""})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Graph label is required in focused mode."
+
+
 def test_knowledge_graph_api_reports_unavailable_backend(client: TestClient, monkeypatch) -> None:
     class FakeGraphService:
         async def knowledge_graph(self, label: str, max_depth: int, max_nodes: int):
@@ -368,3 +416,84 @@ def test_channels_page_shows_webhook_urls(client: TestClient) -> None:
     assert response.status_code == 200
     assert "/webhooks/line" in response.text
     assert "/webhooks/messenger" in response.text
+
+
+def test_channel_config_can_be_saved_and_masked(client: TestClient) -> None:
+    login(client)
+
+    response = client.post(
+        "/channels/line",
+        data={
+            "enabled": "on",
+            "channel_secret": "line-secret-123456",
+            "channel_access_token": "line-token-654321",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] in ("/channels?saved=1", "/channels")
+    with Session(get_engine()) as session:
+        channel = session.get(Channel, 1)
+        assert channel is not None
+        assert channel.provider == "line"
+        assert channel.enabled is True
+        assert json.loads(channel.credential_json) == {
+            "channel_secret": "line-secret-123456",
+            "channel_access_token": "line-token-654321",
+        }
+
+    page = client.get("/channels")
+    assert "lin...456" in page.text
+    assert "line-secret-123456" not in page.text
+    assert "line-token-654321" not in page.text
+
+
+def test_channel_config_blank_secret_keeps_existing_value(client: TestClient) -> None:
+    login(client)
+    client.post(
+        "/channels/line",
+        data={
+            "enabled": "on",
+            "channel_secret": "line-secret",
+            "channel_access_token": "line-token",
+        },
+        follow_redirects=False,
+    )
+
+    response = client.post(
+        "/channels/line",
+        data={
+            "enabled": "on",
+            "channel_secret": "",
+            "channel_access_token": "new-line-token",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    with Session(get_engine()) as session:
+        channel = session.get(Channel, 1)
+        assert channel is not None
+        assert json.loads(channel.credential_json) == {
+            "channel_secret": "line-secret",
+            "channel_access_token": "new-line-token",
+        }
+
+
+def test_dashboard_uses_saved_channel_config_state(client: TestClient) -> None:
+    login(client)
+    client.post(
+        "/channels/line",
+        data={"enabled": "on", "channel_secret": "line-secret", "channel_access_token": "line-token"},
+        follow_redirects=False,
+    )
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "LINE" in response.text
+    assert "Configured" in response.text
+
+
+

@@ -1,6 +1,6 @@
 # Chatbot Manager
 
-Local admin manager for LINE and Facebook Messenger chatbots with rule-first replies and RAG-Anything fallback.
+Local admin manager for LINE, Facebook Messenger, and Telegram chatbots with rule-first replies and RAG-Anything fallback.
 
 ## Run
 
@@ -26,7 +26,7 @@ Default login:
 ## Admin Pages
 
 - Dashboard: channel and RAG status.
-- Channels: webhook URLs for LINE and Messenger.
+- Channels: webhook URLs for LINE, Messenger, and Telegram.
 - Rules: keyword rules and replies.
 - Knowledge: upload documents for RAG-Anything indexing.
 - Graph: view RAG-Anything/LightRAG entities and relationships from the indexed knowledge base.
@@ -45,6 +45,7 @@ Required for real channels:
 - `MESSENGER_VERIFY_TOKEN`
 - `MESSENGER_PAGE_ACCESS_TOKEN`
 - `MESSENGER_APP_SECRET`
+- `TELEGRAM_BOT_TOKEN`
 
 Required for RAG answers:
 
@@ -55,10 +56,19 @@ Required for RAG answers:
 - `RAG_WORKING_DIR`
 - MinerU/RAG-Anything parser dependencies installed on host
 
-## Webhooks
+## Webhooks & Tunnels
 
-- LINE: `POST /webhooks/line`
-- Messenger verification: `GET /webhooks/messenger`
-- Messenger events: `POST /webhooks/messenger`
+### Endpoints
 
-If testing from external LINE or Facebook developer tools, expose the local server through a tunnel and set `API_PUBLIC_URL` to the public URL.
+| Channel | Method | Path |
+|---|---|---|
+| LINE | `POST` | `/webhooks/line` |
+| Messenger | `GET` | `/webhooks/messenger` (verification) |
+| Messenger | `POST` | `/webhooks/messenger` (events) |
+| LINE | `POST` | `/webhooks/line` |
+| Messenger | `GET` | `/webhooks/messenger` (verification) |
+| Messenger | `POST` | `/webhooks/messenger` (events) |
+
+LINE, Messenger, and Telegram use `API_PUBLIC_URL` from config. If testing from external developer tools, expose the local server through a tunnel and set `API_PUBLIC_URL` to the public URL.
+
+Telegram can also use Tailscale Funnel for automatic public HTTPS exposure. Click "Setup Webhook (Tailscale)" on the Channels page to enable it.

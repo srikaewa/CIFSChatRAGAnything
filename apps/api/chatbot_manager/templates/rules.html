@@ -1,18 +1,132 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="page-head"><h1>Rules</h1><p>Rules answer predictable questions before RAG runs.</p></section>
-<form class="panel form-grid" method="post" action="/rules">
-  <label>Keyword <input name="pattern" required></label>
-  <label>Match <select name="match_type"><option value="contains">Contains</option><option value="exact">Exact</option></select></label>
-  <label>Priority <input name="priority" type="number" value="100"></label>
-  <label class="wide">Reply <textarea name="reply_text" required></textarea></label>
-  <button type="submit">Add rule</button>
+
+{% set form_action = "/rules/" ~ editing_rule.id ~ "/update" if editing_rule else "/rules" %}
+<form class="panel form-grid" method="post" action="{{ form_action }}" id="rule-form">
+  <div class="wide conditions-section">
+    <label class="cond-label">Conditions</label>
+    <div class="condition-logic-toggle">
+      <label class="radio-inline">
+        <input type="radio" name="condition_logic" value="and"
+          {{ "checked" if (editing_rule and editing_rule.condition_logic == "and") or not editing_rule else "" }}>
+        Match ALL (AND)
+      </label>
+      <label class="radio-inline">
+        <input type="radio" name="condition_logic" value="or"
+          {{ "checked" if editing_rule and editing_rule.condition_logic == "or" else "" }}>
+        Match ANY (OR)
+      </label>
+    </div>
+    <div id="conditions-container">
+      <div class="condition-row primary-row">
+        <select name="match_type">
+          <option value="contains" {{ "selected" if editing_rule and editing_rule.match_type == "contains" else "" }}>Contains</option>
+          <option value="exact" {{ "selected" if editing_rule and editing_rule.match_type == "exact" else "" }}>Exact</option>
+          <option value="regex" {{ "selected" if editing_rule and editing_rule.match_type == "regex" else "" }}>Regex</option>
+          <option value="starts_with" {{ "selected" if editing_rule and editing_rule.match_type == "starts_with" else "" }}>Starts with</option>
+          <option value="ends_with" {{ "selected" if editing_rule and editing_rule.match_type == "ends_with" else "" }}>Ends with</option>
+          <option value="all_words" {{ "selected" if editing_rule and editing_rule.match_type == "all_words" else "" }}>All words</option>
+          <option value="any_word" {{ "selected" if editing_rule and editing_rule.match_type == "any_word" else "" }}>Any word</option>
+        </select>
+        <input name="pattern" value="{{ editing_rule.pattern if editing_rule else '' }}" placeholder="Keyword" required>
+      </div>
+      <div id="extra-conditions">
+        {% for cond in extra_conditions %}
+        <div class="condition-row extra-row">
+          <select name="cond_match_type">
+            <option value="contains" {{ "selected" if cond.match_type == "contains" else "" }}>Contains</option>
+            <option value="exact" {{ "selected" if cond.match_type == "exact" else "" }}>Exact</option>
+            <option value="regex" {{ "selected" if cond.match_type == "regex" else "" }}>Regex</option>
+            <option value="starts_with" {{ "selected" if cond.match_type == "starts_with" else "" }}>Starts with</option>
+            <option value="ends_with" {{ "selected" if cond.match_type == "ends_with" else "" }}>Ends with</option>
+            <option value="all_words" {{ "selected" if cond.match_type == "all_words" else "" }}>All words</option>
+            <option value="any_word" {{ "selected" if cond.match_type == "any_word" else "" }}>Any word</option>
+          </select>
+          <input name="cond_pattern" value="{{ cond.pattern }}" placeholder="Keyword">
+          <button type="button" class="btn-icon remove-condition" onclick="removeCondition(this)" title="Remove">&times;</button>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <button type="button" class="btn-ghost btn-add-condition" onclick="addCondition()">+ Add condition</button>
+  </div>
+
+  <template id="condition-template">
+    <div class="condition-row extra-row">
+      <select name="cond_match_type">
+        <option value="contains">Contains</option>
+        <option value="exact">Exact</option>
+        <option value="regex">Regex</option>
+        <option value="starts_with">Starts with</option>
+        <option value="ends_with">Ends with</option>
+        <option value="all_words">All words</option>
+        <option value="any_word">Any word</option>
+      </select>
+      <input name="cond_pattern" placeholder="Keyword">
+      <button type="button" class="btn-icon remove-condition" onclick="removeCondition(this)" title="Remove">&times;</button>
+    </div>
+  </template>
+
+  <label>Priority
+    <input name="priority" type="number" value="{{ editing_rule.priority if editing_rule else 100 }}">
+  </label>
+  <label class="wide">Reply
+    <textarea name="reply_text" required>{{ editing_rule.reply_text if editing_rule else '' }}</textarea>
+  </label>
+  <label class="checkbox-label" title="When enabled and this rule matches, the chatbot forwards the conversation to a human expert instead of replying normally">
+    <input type="checkbox" name="escalate" {{ "checked" if editing_rule and editing_rule.escalate else "" }}>
+    Escalate to human
+  </label>
+  <label class="wide">Human handoff reply
+    <textarea name="escalate_message" placeholder="Sent to the user instead of the normal reply when escalation is active">{{ editing_rule.escalate_message if editing_rule else "I've forwarded this to our support team. They will get back to you shortly." }}</textarea>
+  </label>
+  <div class="action-row">
+    <button type="submit">{{ "Update" if editing_rule else "Add" }} rule</button>
+    {% if editing_rule %}
+    <a href="/rules" class="btn-ghost">Cancel</a>
+    {% endif %}
+  </div>
 </form>
+
+<script>
+function addCondition() {
+  var template = document.getElementById('condition-template');
+  var clone = template.content.cloneNode(true);
+  document.getElementById('extra-conditions').appendChild(clone);
+}
+function removeCondition(btn) {
+  var row = btn.closest('.condition-row');
+  if (row) row.remove();
+}
+</script>
+
 <table class="data-table">
-  <thead><tr><th>Priority</th><th>Match</th><th>Keyword</th><th>Reply</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Priority</th>
+      <th>Match</th>
+      <th>Keyword</th>
+      <th>Reply</th>
+      <th>Escalate</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
   <tbody>
     {% for rule in rules %}
-    <tr><td>{{ rule.priority }}</td><td>{{ rule.match_type }}</td><td>{{ rule.pattern }}</td><td>{{ rule.reply_text }}</td></tr>
+    <tr>
+      <td>{{ rule.priority }}</td>
+      <td>{{ rule.match_type }}</td>
+      <td>{{ rule.pattern }}</td>
+      <td>{{ rule.reply_text }}</td>
+      <td>{{ "Yes" if rule.escalate else "" }}</td>
+      <td class="actions">
+        <a href="/rules?edit={{ rule.id }}" class="action-btn">Edit</a>
+        <form method="post" action="/rules/{{ rule.id }}/delete" class="inline-form">
+          <button class="action-btn danger" onclick="return confirm('Delete this rule?')">Delete</button>
+        </form>
+      </td>
+    </tr>
     {% endfor %}
   </tbody>
 </table>

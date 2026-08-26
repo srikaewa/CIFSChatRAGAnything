@@ -6,10 +6,16 @@
 </section>
 
 <form id="graph-form" class="panel graph-controls">
-  <label>Entity label <select id="entity-label-select" name="label" required><option value="{{ default_label }}">{{ default_label }}</option></select></label>
+  <label>Mode
+    <select id="graph-mode-select" name="mode">
+      <option value="all" selected>All entities</option>
+      <option value="local">Around entity</option>
+    </select>
+  </label>
+  <label id="entity-label-field">Entity label <select id="entity-label-select" name="label" required><option value="{{ default_label }}">{{ default_label }}</option></select></label>
   <label>Search <input id="graph-search" type="search" placeholder="Filter loaded graph"></label>
   <label>Type <select id="graph-node-type-filter"><option value="">All types</option></select></label>
-  <label>Depth <input name="max_depth" type="number" min="1" max="5" value="{{ default_max_depth }}"></label>
+  <label id="graph-depth-field">Depth <input id="graph-depth-input" name="max_depth" type="number" min="1" max="5" value="{{ default_max_depth }}"></label>
   <label>Nodes <input name="max_nodes" type="number" min="1" max="500" value="{{ default_max_nodes }}"></label>
   <label>Layout
     <select id="graph-layout-select">
@@ -50,7 +56,11 @@
   const detailTitle = document.getElementById("graph-detail-title");
   const detailMeta = document.getElementById("graph-detail-meta");
   const detailProperties = document.getElementById("graph-detail-properties");
+  const modeSelect = document.getElementById("graph-mode-select");
   const labelSelect = document.getElementById("entity-label-select");
+  const labelField = document.getElementById("entity-label-field");
+  const depthInput = document.getElementById("graph-depth-input");
+  const depthField = document.getElementById("graph-depth-field");
   const layoutSelect = document.getElementById("graph-layout-select");
   const searchInput = document.getElementById("graph-search");
   const typeFilter = document.getElementById("graph-node-type-filter");
@@ -126,7 +136,7 @@
     if (!(graph.nodes || []).length) {
       if (cy) cy.destroy();
       cy = null;
-      status.textContent = (graph.warnings || ["No graph nodes found for this label."]).join(" ");
+      status.textContent = (graph.warnings || ["No graph nodes found."]).join(" ");
       return;
     }
 
@@ -250,15 +260,26 @@
     });
   }
 
+  function syncModeControls() {
+    const allMode = modeSelect.value === "all";
+    labelSelect.disabled = allMode;
+    depthInput.disabled = allMode;
+    labelField.classList.toggle("graph-control-disabled", allMode);
+    depthField.classList.toggle("graph-control-disabled", allMode);
+  }
+
   async function loadGraph(labelOverride = "") {
     const params = new URLSearchParams(new FormData(form));
-    if (labelOverride) params.set("label", labelOverride);
+    if (labelOverride) {
+      params.set("mode", "local");
+      params.set("label", labelOverride);
+    }
     status.textContent = "Loading graph...";
     empty.hidden = false;
     try {
       const response = await fetch(`/api/knowledge-graph?${params.toString()}`);
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || "Graph request failed.");
+      if (!response.ok) throw new Error(graphErrorMessage(payload));
       drawGraph(payload);
     } catch (error) {
       status.textContent = error.message;
@@ -272,9 +293,15 @@
   layoutSelect.addEventListener("change", runLayout);
   searchInput.addEventListener("input", applyFilters);
   typeFilter.addEventListener("change", applyFilters);
+  modeSelect.addEventListener("change", () => {
+    syncModeControls();
+    loadGraph();
+  });
   expandButton.addEventListener("click", () => {
     if (selectedNodeId) {
+      modeSelect.value = "local";
       labelSelect.value = selectedNodeId;
+      syncModeControls();
       loadGraph(selectedNodeId);
     }
   });
@@ -283,18 +310,30 @@
     try {
       const response = await fetch("/api/knowledge-graph/labels");
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || "Could not load graph labels.");
+      if (!response.ok) throw new Error(graphErrorMessage(payload, "Could not load graph labels."));
       const labels = payload.labels || [];
       labelSelect.innerHTML = labels.map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`).join("");
       if (labels.length) {
         labelSelect.value = labels[0];
         status.textContent = `${labels.length} entity labels available.`;
+        syncModeControls();
+        await loadGraph();
       } else {
         status.textContent = "No graph entities extracted. Check LLM settings and reindex.";
+        syncModeControls();
       }
     } catch (error) {
       status.textContent = error.message;
     }
+  }
+
+  function graphErrorMessage(payload, fallback = "Graph request failed.") {
+    if (!payload || !payload.detail) return fallback;
+    if (typeof payload.detail === "string") return payload.detail;
+    if (Array.isArray(payload.detail)) {
+      return payload.detail.map((item) => item.msg || JSON.stringify(item)).join(" ");
+    }
+    return JSON.stringify(payload.detail);
   }
 
   function escapeHtml(value) {
@@ -306,6 +345,7 @@
       .replaceAll("'", "&#039;");
   }
 
+  syncModeControls();
   loadEntityLabels();
 </script>
 {% endblock %}

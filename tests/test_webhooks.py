@@ -5,6 +5,10 @@ import hmac
 import respx
 from fastapi.testclient import TestClient
 from httpx import Response
+from sqlmodel import Session
+
+from chatbot_manager.db import get_engine
+from chatbot_manager.models import Channel
 
 
 def line_signature(body: bytes, secret: str) -> str:
@@ -25,6 +29,27 @@ def test_messenger_verification(client: TestClient) -> None:
     response = client.get(
         "/webhooks/messenger",
         params={"hub.mode": "subscribe", "hub.verify_token": "", "hub.challenge": "challenge-1"},
+    )
+
+    assert response.status_code == 200
+    assert response.text == "challenge-1"
+
+
+def test_messenger_verification_uses_saved_channel_verify_token(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        session.add(
+            Channel(
+                provider="messenger",
+                enabled=True,
+                display_name="Messenger",
+                credential_json='{"verify_token": "db-verify", "page_access_token": "", "app_secret": ""}',
+            )
+        )
+        session.commit()
+
+    response = client.get(
+        "/webhooks/messenger",
+        params={"hub.mode": "subscribe", "hub.verify_token": "db-verify", "hub.challenge": "challenge-1"},
     )
 
     assert response.status_code == 200
@@ -77,3 +102,38 @@ def test_line_webhook_processes_text_rule_and_logs(client: TestClient) -> None:
     logs = client.get("/logs")
     assert "price please" in logs.text
     assert "Price is 100." in logs.text
+
+
+@respx.mock
+def test_line_webhook_uses_saved_channel_credentials(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        session.add(
+            Channel(
+                provider="line",
+                enabled=True,
+                display_name="LINE",
+                credential_json='{"channel_secret": "db-secret", "channel_access_token": "db-token"}',
+            )
+        )
+        session.commit()
+    login(client)
+    client.post(
+        "/rules",
+        data={"pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
+        follow_redirects=False,
+    )
+    route = respx.post("https://api.line.me/v2/bot/message/reply").mock(return_value=Response(200, json={}))
+    body = (
+        b'{"events":[{"type":"message","replyToken":"reply-token","source":{"userId":"user-1"},'
+        b'"message":{"type":"text","text":"price please"}}]}'
+    )
+
+    response = client.post(
+        "/webhooks/line",
+        content=body,
+        headers={"x-line-signature": line_signature(body, "db-secret")},
+    )
+
+    assert response.status_code == 200
+    assert route.called
+    assert route.calls[0].request.headers["authorization"] == "Bearer db-token"

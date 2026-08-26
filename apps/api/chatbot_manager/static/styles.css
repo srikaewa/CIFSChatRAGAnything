@@ -1,11 +1,22 @@
 :root {
   color-scheme: light;
-  --bg: oklch(0.97 0.006 210);
-  --panel: oklch(0.995 0.004 210);
-  --ink: oklch(0.22 0.025 235);
-  --muted: oklch(0.48 0.02 235);
-  --line: oklch(0.84 0.012 235);
-  --accent: oklch(0.56 0.13 175);
+  --bg: oklch(0.97 0.015 75);
+  --panel: oklch(0.995 0.006 75);
+  --ink: oklch(0.2 0.025 250);
+  --muted: oklch(0.4 0.03 250);
+  --line: oklch(0.84 0.015 75);
+  --accent: oklch(0.58 0.18 25);
+  --accent-hover: oklch(0.5 0.2 25);
+  --accent-soft: oklch(0.92 0.06 25);
+  --accent-ring: oklch(0.58 0.18 25);
+  --success-bg: oklch(0.55 0.14 145);
+  --success-fg: oklch(0.99 0.006 145);
+  --danger-bg: oklch(0.52 0.18 28);
+  --danger-fg: oklch(0.99 0.006 20);
+  --error-bg: oklch(0.92 0.08 28);
+  --error-fg: oklch(0.42 0.16 28);
+  --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.06);
+  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.06), 0 1px 3px oklch(0 0 0 / 0.04);
 }
 
 * {
@@ -14,7 +25,7 @@
 
 body {
   margin: 0;
-  font-family: "Aptos", "Segoe UI", sans-serif;
+  font-family: "Aptos", "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
   color: var(--ink);
 }
@@ -35,13 +46,24 @@ textarea {
   inset: 0 auto 0 0;
   width: 240px;
   padding: 24px 16px;
-  background: oklch(0.25 0.04 235);
-  color: oklch(0.96 0.006 210);
+  background: oklch(0.16 0.025 250);
+  color: oklch(0.92 0.01 250);
 }
 
 .brand {
-  font-weight: 800;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
   margin-bottom: 28px;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.brand-logo {
+  height: 96px;
+  width: auto;
 }
 
 .sidebar nav {
@@ -53,19 +75,24 @@ textarea {
   padding: 10px 12px;
   border-radius: 8px;
   text-decoration: none;
-  color: oklch(0.88 0.012 220);
+  color: oklch(0.82 0.015 250);
+  transition: background 0.15s, color 0.15s;
 }
 
-.sidebar a.active,
+.sidebar a.active {
+  background: oklch(0.28 0.045 250);
+  color: oklch(0.98 0.006 250);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 .sidebar a:hover {
-  background: oklch(0.34 0.055 235);
-  color: oklch(0.98 0.004 210);
+  background: oklch(0.24 0.035 250);
+  color: oklch(0.92 0.01 250);
 }
 
 .main {
   margin-left: 240px;
   min-height: 100vh;
-  padding: 24px 32px 48px;
+  padding: 28px 36px 48px;
 }
 
 .topbar {
@@ -81,10 +108,20 @@ textarea {
 .login-panel button {
   border: 0;
   border-radius: 8px;
-  padding: 10px 14px;
+  padding: 11px 16px;
   background: var(--accent);
-  color: oklch(0.99 0.004 175);
+  color: white;
   cursor: pointer;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+.topbar button:hover,
+.login-panel button:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-sm);
+}
+.topbar button:active,
+.login-panel button:active {
+  transform: scale(0.97);
 }
 
 .page-head {
@@ -93,8 +130,10 @@ textarea {
 }
 
 .page-head h1 {
-  font-size: 2rem;
+  font-size: 1.75rem;
   margin: 0 0 8px;
+  letter-spacing: -0.02em;
+  color: oklch(0.15 0.05 250);
 }
 
 .page-head p {
@@ -112,18 +151,85 @@ textarea {
 .login-panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 20px;
+  box-shadow: var(--shadow-sm);
 }
 
 .panel h2 {
   margin: 0 0 8px;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: oklch(0.15 0.05 250);
 }
 
 .panel p {
   margin: 0;
   color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.webhook-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.webhook-row code {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+  font-size: 0.85em;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+
+.copy-btn:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.copy-btn.copied {
+  background: var(--success-bg);
+  color: var(--success-fg);
+  border-color: var(--success-bg);
+}
+
+.danger-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 16px;
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.danger-btn:hover {
+  background: oklch(0.44 0.2 28);
+}
+.danger-btn:active {
+  transform: scale(0.97);
+}
+
+.panel-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
 }
 
 .login-body {
@@ -157,19 +263,77 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px 12px;
-  background: oklch(1 0 0);
+  background: white;
   color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: none;
+}
+
+.alert {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.alert-success {
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+.alert-error {
+  background: var(--error-bg);
+  color: var(--error-fg);
+  border: 1px solid oklch(0.62 0.15 28);
 }
 
 .error {
-  color: oklch(0.52 0.17 28);
+  color: var(--error-fg);
   margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
+:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 @media (max-width: 760px) {
   .sidebar {
     position: static;
     width: auto;
+    border-bottom: 2px solid oklch(0.22 0.035 250);
+  }
+
+  .sidebar nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .sidebar a {
+    font-size: 0.85rem;
+    padding: 8px 10px;
+    white-space: nowrap;
   }
 
   .main {
@@ -193,6 +357,23 @@ textarea {
 
 .form-grid .wide {
   grid-column: 1 / -1;
+}
+
+.form-grid button {
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 16px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.form-grid button:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-sm);
+}
+.form-grid button:active {
+  transform: scale(0.97);
 }
 
 textarea {
@@ -225,9 +406,167 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
-  background: oklch(0.98 0.004 210);
+  background: white;
   color: var(--ink);
   cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.data-table button:hover {
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
+}
+
+.actions {
+  white-space: nowrap;
+}
+
+.action-btn {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  background: white;
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.action-btn:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.action-btn.danger:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger-bg);
+}
+
+.inline-form {
+  display: inline;
+}
+
+.btn-ghost {
+  display: inline-block;
+  padding: 11px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  transition: color 0.15s;
+}
+.btn-ghost:hover {
+  color: var(--ink);
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.form-grid .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+.form-grid .checkbox-label input[type="checkbox"] {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.section-divider {
+  grid-column: 1 / -1;
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 8px 0;
+}
+
+.conditions-section {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+
+.cond-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.condition-logic-toggle {
+  display: flex;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.radio-inline {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--ink) !important;
+}
+
+.radio-inline input[type="radio"] {
+  width: auto;
+  margin: 0;
+}
+
+.condition-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.condition-row select,
+.condition-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.primary-row select {
+  flex: 0 0 140px;
+}
+
+.extra-row select {
+  flex: 0 0 140px;
+}
+
+.btn-icon {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+
+.btn-icon:hover {
+  color: var(--danger-bg);
+  background: var(--error-bg);
+}
+
+.btn-add-condition {
+  justify-self: start;
+  padding: 6px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.btn-add-condition:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .result {
@@ -244,7 +583,7 @@ textarea {
 
 .graph-controls {
   display: grid;
-  grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 1fr) minmax(140px, 0.8fr) 96px 110px 140px auto;
+  grid-template-columns: 140px minmax(220px, 1.2fr) minmax(180px, 1fr) minmax(140px, 0.8fr) 96px 110px 140px auto;
   gap: 16px;
   align-items: end;
   margin-bottom: 20px;
@@ -256,14 +595,27 @@ textarea {
   color: var(--muted);
 }
 
+.graph-control-disabled {
+  opacity: 0.55;
+}
+
 .graph-controls button,
 .graph-secondary-action {
   border: 0;
   border-radius: 8px;
   padding: 11px 16px;
   background: var(--accent);
-  color: oklch(0.99 0.004 175);
+  color: white;
   cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.graph-controls button:hover,
+.graph-secondary-action:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.graph-controls button:active,
+.graph-secondary-action:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .graph-secondary-action {
@@ -317,7 +669,7 @@ textarea {
 }
 
 .graph-edge {
-  stroke: oklch(0.68 0.025 225);
+  stroke: oklch(0.68 0.03 250);
   stroke-width: 1.5;
 }
 
@@ -337,14 +689,14 @@ textarea {
 }
 
 .graph-node circle {
-  fill: oklch(0.9 0.045 178);
-  stroke: oklch(0.54 0.12 175);
+  fill: oklch(0.92 0.06 25);
+  stroke: var(--accent);
   stroke-width: 2;
 }
 
 .graph-node:hover circle,
 .graph-node:focus circle {
-  fill: oklch(0.84 0.07 178);
+  fill: var(--accent-soft);
 }
 
 .graph-node text {
@@ -381,7 +733,7 @@ textarea {
   margin: 0;
   padding: 14px;
   border-radius: 8px;
-  background: oklch(0.96 0.006 210);
+  background: var(--bg);
   border: 1px solid var(--line);
   color: var(--ink);
   overflow: auto;

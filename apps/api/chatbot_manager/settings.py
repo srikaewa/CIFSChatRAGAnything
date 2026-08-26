@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     messenger_verify_token: str = ""
     messenger_page_access_token: str = ""
     messenger_app_secret: str = ""
-
+    telegram_bot_token: str = ""
+    
     llm_provider: str = "openai_compatible"
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""

@@ -54,6 +54,10 @@ def init_db() -> None:
     SQLModel.metadata.create_all(active_engine)
     _migrate_sqlite_assistant_settings(active_engine)
     _migrate_sqlite_knowledge_documents(active_engine)
+    _migrate_sqlite_rule_escalate(active_engine)
+    _migrate_sqlite_assistant_settings_escalation(active_engine)
+    _migrate_sqlite_system_prompt(active_engine)
+    _migrate_sqlite_rule_conditions(active_engine)
 
 
 def _migrate_sqlite_assistant_settings(active_engine: Engine) -> None:
@@ -86,6 +90,69 @@ def _migrate_sqlite_knowledge_documents(active_engine: Engine) -> None:
         }
         if "rag_doc_id" not in existing:
             connection.execute(text("ALTER TABLE knowledgedocument ADD COLUMN rag_doc_id TEXT NOT NULL DEFAULT ''"))
+
+
+def _migrate_sqlite_rule_escalate(active_engine: Engine) -> None:
+    if not active_engine.url.drivername.startswith("sqlite"):
+        return
+
+    with active_engine.begin() as connection:
+        existing = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(rule)")).all()
+        }
+        if "escalate" not in existing:
+            connection.execute(text("ALTER TABLE rule ADD COLUMN escalate BOOLEAN NOT NULL DEFAULT 0"))
+        if "escalate_message" not in existing:
+            connection.execute(text("ALTER TABLE rule ADD COLUMN escalate_message TEXT NOT NULL DEFAULT ''"))
+
+
+def _migrate_sqlite_assistant_settings_escalation(active_engine: Engine) -> None:
+    if not active_engine.url.drivername.startswith("sqlite"):
+        return
+
+    with active_engine.begin() as connection:
+        existing = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(assistantsettings)")).all()
+        }
+        if "admin_notify_channel" not in existing:
+            connection.execute(text("ALTER TABLE assistantsettings ADD COLUMN admin_notify_channel TEXT NOT NULL DEFAULT 'telegram'"))
+        if "admin_notify_chat_id" not in existing:
+            connection.execute(text("ALTER TABLE assistantsettings ADD COLUMN admin_notify_chat_id TEXT NOT NULL DEFAULT ''"))
+
+
+def _migrate_sqlite_rule_conditions(active_engine: Engine) -> None:
+    if not active_engine.url.drivername.startswith("sqlite"):
+        return
+
+    with active_engine.begin() as connection:
+        existing = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(rule)")).all()
+        }
+        if "condition_logic" not in existing:
+            connection.execute(text("ALTER TABLE rule ADD COLUMN condition_logic TEXT NOT NULL DEFAULT 'and'"))
+        if "conditions" not in existing:
+            connection.execute(text("ALTER TABLE rule ADD COLUMN conditions TEXT NOT NULL DEFAULT '[]'"))
+
+
+def _migrate_sqlite_system_prompt(active_engine: Engine) -> None:
+    if not active_engine.url.drivername.startswith("sqlite"):
+        return
+
+    old_prompts = [
+        "Answer as a helpful business assistant. Use the knowledge base when needed.",
+        "Answer the question using only the provided context. Do not add information from your own training. If the context does not contain the answer, say you do not have that information.",
+    ]
+    new_prompt = "Answer the question using the provided context. If the context contains relevant information, use it to answer. If the context is missing or insufficient, say that the information is not available in the knowledge base rather than making up an answer."
+
+    with active_engine.begin() as connection:
+        for old in old_prompts:
+            connection.execute(
+                text("UPDATE assistantsettings SET system_prompt = :new WHERE system_prompt = :old"),
+                {"new": new_prompt, "old": old},
+            )
 
 
 def get_session() -> Generator[Session, None, None]:

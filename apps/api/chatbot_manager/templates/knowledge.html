@@ -6,7 +6,7 @@
 </section>
 
 <form class="panel form-grid" method="post" action="/knowledge" enctype="multipart/form-data">
-  <label class="wide">Upload document <input type="file" name="file" required></label>
+  <label class="wide">Upload documents <input type="file" name="files" multiple required></label>
   <button type="submit">Upload index</button>
 </form>
 
@@ -19,9 +19,12 @@
       <td data-field="status">{{ document.status }}</td>
       <td data-field="indexed_at">{{ document.indexed_at or "" }}</td>
       <td data-field="error">{{ document.error }}</td>
-      <td>
-        <form method="post" action="/knowledge/{{ document.id }}/reindex">
-          <button type="submit">Reindex</button>
+      <td class="actions">
+        <form method="post" action="/knowledge/{{ document.id }}/reindex" class="inline-form">
+          <button class="action-btn">Reindex</button>
+        </form>
+        <form method="post" action="/knowledge/{{ document.id }}/delete" class="inline-form">
+          <button class="action-btn danger" onclick="return confirm('Delete this document and its indexed data?')">Delete</button>
         </form>
       </td>
     </tr>
@@ -42,9 +45,12 @@
         <td data-field="status">${escapeHtml(document.status)}</td>
         <td data-field="indexed_at">${escapeHtml(document.indexed_at || "")}</td>
         <td data-field="error">${escapeHtml(document.error || "")}</td>
-        <td>
-          <form method="post" action="/knowledge/${document.id}/reindex">
-            <button type="submit">Reindex</button>
+        <td class="actions">
+          <form method="post" action="/knowledge/${document.id}/reindex" class="inline-form">
+            <button class="action-btn">Reindex</button>
+          </form>
+          <form method="post" action="/knowledge/${document.id}/delete" class="inline-form">
+            <button class="action-btn danger" onclick="return confirm('Delete this document and its indexed data?')">Delete</button>
           </form>
         </td>
       </tr>

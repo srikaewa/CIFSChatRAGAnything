@@ -1,17 +1,76 @@
 {% extends "base.html" %}
+
 {% block content %}
-<section class="page-head"><h1>Channels</h1><p>Copy these webhook URLs into LINE and Facebook developer settings.</p></section>
-<section class="grid">
-  <article class="panel">
-    <h2>LINE</h2>
-    <p>Webhook URL: <code>{{ line_webhook }}</code></p>
-    <p>Status: {{ "Ready" if settings.line_channel_access_token else "Needs channel access token" }}</p>
-  </article>
-  <article class="panel">
-    <h2>Messenger</h2>
-    <p>Webhook URL: <code>{{ messenger_webhook }}</code></p>
-    <p>Verify token: <code>{{ settings.messenger_verify_token }}</code></p>
-    <p>Status: {{ "Ready" if settings.messenger_page_access_token else "Needs page access token" }}</p>
-  </article>
+
+<section class="page-head">
+  <h1>Channels</h1>
+  <p>Configure live chat credentials and copy webhook URLs into provider consoles.</p>
 </section>
+
+{% if saved %}
+<p class="alert alert-success">Channel saved successfully.</p>
+{% elif error %}
+<p class="alert alert-error">{{ error }}</p>
+{% endif %}
+
+<section class="grid">
+{% for card in channel_cards %}
+  {% set webhook_url = webhook_urls[card.provider] %}
+  {% set is_telegram = card.provider == "telegram" %}
+  <article class="panel">
+    <h2>{{ card.display_name }}</h2>
+    <div class="webhook-row">
+      <code>{{ webhook_url }}</code>
+      <button class="copy-btn" data-copy="{{ webhook_url }}" title="Copy webhook URL">Copy</button>
+    </div>
+    <p>Status: {{ "Ready" if card.configured else "Not configured" }}</p>
+    {% if is_telegram and telegram_webhook_active %}
+    <div class="webhook-row">
+      <code>{{ telegram_webhook_active }}</code>
+      <button class="copy-btn" data-copy="{{ telegram_webhook_active }}" title="Copy active webhook URL">Copy</button>
+    </div>
+    {% endif %}
+    <form class="form-grid" method="post" action="/channels/{{ card.provider }}">
+      <label class="checkbox-label" title="When enabled, this channel can receive and reply to messages">
+        <input type="checkbox" name="enabled" {{ "checked" if card.enabled else "" }}>
+        Enable {{ card.display_name }} channel
+      </label>
+      {% for field in card.masked %}
+      <label class="wide">{{ field | replace("_", " ") | title }}
+        <input name="{{ field }}" type="password" placeholder="{{ card.masked[field] or 'Not set' }}">
+      </label>
+      {% endfor %}
+      <button type="submit">Save {{ card.display_name }}</button>
+    </form>
+    {% if is_telegram and card.configured %}
+    <div class="panel-actions">
+      {% if telegram_webhook_active %}
+      <form method="post" action="/channels/telegram/disable-webhook">
+        <button class="danger-btn" onclick="return confirm('This will disable your live Telegram webhook and stop incoming messages. Continue?')">Disable Webhook</button>
+      </form>
+      {% else %}
+      <form method="post" action="/channels/telegram/setup-webhook">
+        <button type="submit">Setup Webhook (Tailscale)</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </article>
+{% endfor %}
+</section>
+
+<script>
+document.querySelectorAll('.copy-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    navigator.clipboard.writeText(this.dataset.copy).then(function() {
+      var orig = this.textContent;
+      this.textContent = 'Copied';
+      this.classList.add('copied');
+      var self = this;
+      setTimeout(function() { self.textContent = orig; self.classList.remove('copied'); }, 2000);
+    }.bind(this));
+  });
+});
+</script>
+
 {% endblock %}
