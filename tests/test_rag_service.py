@@ -56,7 +56,7 @@ class DummyRag:
 async def test_index_document_calls_rag_client_with_file_path(tmp_path: Path) -> None:
     dummy = DummyRag()
     settings = Settings(rag_working_dir=tmp_path / "rag-work", rag_parse_method="ocr")
-    service = RagAnythingService(settings=settings, rag_client=dummy)
+    service = RagAnythingService(settings=settings, rag_client=dummy, llm_api_key="test-key")
     document = tmp_path / "source.pdf"
 
     await service.index_document(document, rag_doc_id="knowledge-7")
@@ -115,7 +115,7 @@ async def test_reindex_document_deletes_stale_lightrag_records_before_processing
 
     fake = FakeRag()
     settings = Settings(rag_working_dir=tmp_path / "rag-work")
-    service = RagAnythingService(settings=settings, rag_client=fake)
+    service = RagAnythingService(settings=settings, rag_client=fake, llm_api_key="test-key")
     document = tmp_path / "source.pdf"
 
     await service.reindex_document(document, rag_doc_id="knowledge-7")
@@ -170,7 +170,7 @@ async def test_index_document_raises_when_no_graph_entities_are_extracted(tmp_pa
             self.lightrag = FakeLightRag()
 
     fake = FakeRag()
-    service = RagAnythingService(settings=Settings(rag_working_dir=tmp_path / "rag-work"), rag_client=fake)
+    service = RagAnythingService(settings=Settings(rag_working_dir=tmp_path / "rag-work"), rag_client=fake, llm_api_key="test-key")
 
     with pytest.raises(RuntimeError, match="No graph entities were extracted"):
         await service.index_document(tmp_path / "source.pdf", rag_doc_id="knowledge-7")

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pytest
@@ -187,7 +188,10 @@ def test_knowledge_document_can_be_reindexed(client: TestClient, monkeypatch) ->
     assert status["status"] == "pending"
     assert status["error"] == ""
     assert status["rag_doc_id"] == "knowledge-1"
-    assert queued[-1] == (1, "data/uploads/menu.txt", True)
+    document_id, queued_path, reindex = queued[-1]
+    assert document_id == 1
+    assert Path(queued_path) == Path("data/uploads/menu.txt")
+    assert reindex is True
 
 
 @pytest.mark.asyncio
@@ -208,7 +212,9 @@ async def test_index_document_task_passes_rag_doc_id_to_index(client: TestClient
 
     await index_document_task(document_id, "data/uploads/menu.txt")
 
-    assert calls == [("data/uploads/menu.txt", "knowledge-9")]
+    assert len(calls) == 1
+    assert Path(calls[0][0]) == Path("data/uploads/menu.txt")
+    assert calls[0][1] == "knowledge-9"
 
 
 @pytest.mark.asyncio
@@ -229,7 +235,9 @@ async def test_index_document_task_uses_reindex_mode(client: TestClient, monkeyp
 
     await index_document_task(document_id, "data/uploads/menu.txt", reindex=True)
 
-    assert calls == [("data/uploads/menu.txt", "knowledge-9")]
+    assert len(calls) == 1
+    assert Path(calls[0][0]) == Path("data/uploads/menu.txt")
+    assert calls[0][1] == "knowledge-9"
 
 
 def test_knowledge_upload_skips_unsupported_file_type(client: TestClient) -> None:
