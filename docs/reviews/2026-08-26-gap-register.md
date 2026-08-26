@@ -81,6 +81,24 @@ Phase 5 verification results:
 - Real browser checks covered primary admin pages at desktop width and a real 620 px narrow Chrome window.
 - GAP-013 through GAP-016 are closed; Phase 6 release verification is next.
 
+## Phase 6 Closure
+
+Release evidence is recorded in `docs/reviews/2026-08-26-phase-6-release-verification.md` and `docs/releases/2026-08-26-release-candidate.md`.
+
+| Status | Gaps |
+|---|---|
+| Newly completed in Phase 6 | None; all registered gaps were already closed by Phase 5 |
+| Remaining registered gaps | None |
+
+Phase 6 release-verification evidence before the final evidence commit:
+
+- Full warning-enabled suite: `181 passed`.
+- Functional/admin/provider smoke suite: `116 passed`.
+- Security regression suite: `49 passed`.
+- Syntax compilation and `git diff --check`: clean.
+- Tracked artifact and credential scans: clean.
+- No production credentials or live external-service mutations were used.
+
 ## Ordered Gaps
 
 | ID | Priority | Phase | Area | Finding | Evidence | User impact | Acceptance check |
