@@ -55,5 +55,5 @@
 - [x] Record features, setup/migration notes, verification evidence, optional live-service checks, and known limitations in release notes.
 - [x] Record exact command results and release-gate decision in the Phase 6 verification report.
 - [x] Add Phase 6 closure to the gap register without inventing new closed gaps.
-- [ ] Commit release evidence.
-- [ ] Rerun the full suite, compileall, `git diff --check`, and `git status --short` after the final evidence commit.
+- [x] Commit release evidence.
+- [x] Rerun the full suite, compileall, `git diff --check`, and `git status --short` after the final evidence commit.

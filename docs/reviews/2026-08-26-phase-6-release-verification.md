@@ -66,4 +66,4 @@ An independent read-only release review was requested against `3afbc42..a993766`
 
 ## Release Gate
 
-**PENDING** — release evidence is complete; the required post-evidence commit full/static/clean-status rerun remains.
+**PASS** — post-evidence commit verification completed: `181 passed in 7.65s`, `compileall` exit 0, `git diff --check` exit 0, and `git status --short` clean.
