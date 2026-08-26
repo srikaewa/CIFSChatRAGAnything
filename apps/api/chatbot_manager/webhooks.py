@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -16,6 +17,7 @@ from chatbot_manager.models import AssistantSettings, ChatEvent, Rule
 from chatbot_manager.rag.service import rag_service_from_assistant
 from chatbot_manager.settings import get_settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks")
 Sender = Callable[[dict[str, Any], str], Awaitable[None]]
 
@@ -36,12 +38,12 @@ async def _notify_admin(settings: Any, session: Session, message: IncomingMessag
         return
     channel = getattr(settings, "admin_notify_channel", "telegram")
     if channel != "telegram":
-        return
+        raise ValueError("Unsupported admin notification channel")
     app_settings = get_settings()
     creds = channel_credentials(session, app_settings, "telegram")
     bot_token = creds.get("bot_token", "")
     if not bot_token:
-        return
+        raise RuntimeError("Telegram admin notification is not configured")
     adapter = TelegramAdapter(bot_token, "")
     text = (
         f"Need human help\n"
@@ -51,6 +53,10 @@ async def _notify_admin(settings: Any, session: Session, message: IncomingMessag
         f"Rule: {rule_reply}"
     )
     await adapter.send_reply({"chat_id": int(chat_id)}, text)
+
+
+def append_event_error(current: str, code: str) -> str:
+    return ";".join(part for part in (current, code) if part)
 
 
 async def process_messages(messages: list[IncomingMessage], sender: Sender, session: Session) -> int:
@@ -64,22 +70,47 @@ async def process_messages(messages: list[IncomingMessage], sender: Sender, sess
             rules=rules,
             settings=settings,
         )
-        await sender(message.reply_context, decision.reply_text)
-        if decision.escalate:
-            await _notify_admin(settings, session, message, decision.rule_reply)
-        session.add(
-            ChatEvent(
-                provider=message.provider,
-                external_user_id=message.external_user_id,
-                incoming_text=message.text,
-                decision_source=decision.source,
-                reply_text=decision.reply_text,
-                error=decision.error,
-                raw_event=json.dumps(message.raw_event, ensure_ascii=False),
-            )
+        event = ChatEvent(
+            provider=message.provider,
+            external_user_id=message.external_user_id,
+            incoming_text=message.text,
+            decision_source=decision.source,
+            reply_text=decision.reply_text,
+            error="response_generation_failed" if decision.error else "",
+            raw_event=json.dumps(message.raw_event, ensure_ascii=False),
         )
+        session.add(event)
+        session.commit()
+        session.refresh(event)
+
+        try:
+            await sender(message.reply_context, decision.reply_text)
+        except Exception as exc:
+            logger.error(
+                "Provider reply failed provider=%s error_type=%s",
+                message.provider,
+                type(exc).__name__,
+            )
+            event.error = append_event_error(event.error, "reply_send_failed")
+            session.add(event)
+            session.commit()
+            processed += 1
+            continue
+
+        if decision.escalate:
+            try:
+                await _notify_admin(settings, session, message, decision.rule_reply)
+            except Exception as exc:
+                logger.error(
+                    "Admin notification failed provider=%s error_type=%s",
+                    message.provider,
+                    type(exc).__name__,
+                )
+                event.error = append_event_error(event.error, "admin_notification_failed")
+
+        session.add(event)
+        session.commit()
         processed += 1
-    session.commit()
     return processed
 
 

@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from pathlib import PurePath
 from uuid import uuid4
@@ -17,6 +18,7 @@ from chatbot_manager.rag.service import rag_service_from_assistant
 from chatbot_manager.security import decrypt_secret, encrypt_secret, make_csrf_token, make_session_token, mask_secret, read_session_token, verify_admin, verify_csrf_token
 from chatbot_manager.settings import get_settings
 
+logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
 templates.env.globals["csrf_token_for"] = make_csrf_token
 router = APIRouter()
@@ -164,7 +166,9 @@ def channels_page(
             "webhook_urls": {c["provider"]: f"{base_url}/webhooks/{c['provider']}" for c in cards},
             "telegram_webhook_active": telegram_card.get("credentials", {}).get("webhook_url", ""),
             "saved": saved == "1",
-            "error": error or "",
+            "error": {
+                "channel_save_failed": "Could not save channel settings. Check the configuration and retry.",
+            }.get(error or "", error or ""),
         },
     )
 
@@ -201,7 +205,8 @@ def update_channel(
             },
         )
     except Exception as exc:
-        return RedirectResponse(f"/channels?error={exc}", status_code=303)
+        logger.error("Channel save failed provider=%s error_type=%s", provider, type(exc).__name__)
+        return RedirectResponse("/channels?error=channel_save_failed", status_code=303)
     return RedirectResponse("/channels?saved=1", status_code=303)
 
 
