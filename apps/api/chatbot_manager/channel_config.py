@@ -5,8 +5,8 @@ from typing import Any
 from sqlmodel import Session, select
 
 from chatbot_manager.models import Channel, utc_now
-from chatbot_manager.security import mask_secret
-from chatbot_manager.settings import Settings
+from chatbot_manager.security import decrypt_secret, encrypt_secret, mask_secret
+from chatbot_manager.settings import Settings, get_settings
 
 
 @dataclass(frozen=True)
@@ -63,7 +63,7 @@ def get_channel(session: Session, provider: str) -> Channel | None:
     return session.exec(select(Channel).where(Channel.provider == provider)).first()
 
 
-def decode_credentials(channel: Channel | None) -> dict[str, str]:
+def decode_credentials(channel: Channel | None, encryption_key: str | None = None) -> dict[str, str]:
     if channel is None:
         return {}
     try:
@@ -72,12 +72,21 @@ def decode_credentials(channel: Channel | None) -> dict[str, str]:
         return {}
     if not isinstance(raw, dict):
         return {}
-    return {str(key): str(value) for key, value in raw.items() if value is not None}
+    key = encryption_key or get_settings().app_encryption_key
+    return {
+        str(field): decrypt_secret(str(value), key)
+        for field, value in raw.items()
+        if value is not None
+    }
+
+
+def encode_credentials(credentials: dict[str, str], encryption_key: str) -> dict[str, str]:
+    return {field: encrypt_secret(value, encryption_key) for field, value in credentials.items()}
 
 
 def channel_credentials(session: Session, settings: Settings, provider: str) -> dict[str, str]:
     credentials = env_credentials(settings, provider)
-    for key, value in decode_credentials(get_channel(session, provider)).items():
+    for key, value in decode_credentials(get_channel(session, provider), settings.app_encryption_key).items():
         if value:
             credentials[key] = value
     return credentials
@@ -101,7 +110,7 @@ def save_channel(
         channel = Channel(provider=provider, display_name=definition.display_name)
     channel.enabled = enabled
     channel.display_name = definition.display_name
-    channel.credential_json = json.dumps(credentials)
+    channel.credential_json = json.dumps(encode_credentials(credentials, get_settings().app_encryption_key))
     channel.status = "configured" if is_configured(credentials, definition.required_fields) else "not_configured"
     channel.updated_at = utc_now()
     session.add(channel)
@@ -118,7 +127,7 @@ def update_channel_credentials(session: Session, provider: str, updates: dict[st
     if channel is None:
         channel = Channel(provider=provider, display_name=definition.display_name)
     channel.display_name = definition.display_name
-    channel.credential_json = json.dumps(credentials)
+    channel.credential_json = json.dumps(encode_credentials(credentials, get_settings().app_encryption_key))
     channel.status = "configured" if is_configured(credentials, definition.required_fields) else "not_configured"
     channel.updated_at = utc_now()
     session.add(channel)

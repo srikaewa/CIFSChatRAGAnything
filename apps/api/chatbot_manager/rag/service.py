@@ -4,6 +4,7 @@ from pathlib import Path
 from inspect import isawaitable
 from typing import Any, Protocol, TYPE_CHECKING
 
+from chatbot_manager.security import decrypt_secret
 from chatbot_manager.settings import Settings
 
 if TYPE_CHECKING:
@@ -31,9 +32,10 @@ class FakeRagService(RagService):
 
 def rag_service_from_assistant(settings: AssistantSettings) -> RagAnythingService:
     app_settings = Settings()
+    assistant_api_key = decrypt_secret(settings.llm_api_key, app_settings.app_encryption_key)
     return RagAnythingService(
         llm_base_url=settings.llm_base_url or app_settings.llm_base_url,
-        llm_api_key=settings.llm_api_key or app_settings.llm_api_key,
+        llm_api_key=assistant_api_key or app_settings.llm_api_key,
         llm_model=settings.llm_model or app_settings.llm_default_model,
         vision_model=settings.vision_model or app_settings.llm_vision_model,
         embedding_model=settings.embedding_model or app_settings.llm_embedding_model,

@@ -13,7 +13,7 @@ from chatbot_manager.db import get_session
 from chatbot_manager.models import AssistantSettings, ChatEvent, KnowledgeDocument, Rule, utc_now
 from chatbot_manager.channels.telegram import TelegramAdapter
 from chatbot_manager.rag.service import rag_service_from_assistant
-from chatbot_manager.security import make_csrf_token, make_session_token, mask_secret, read_session_token, verify_admin, verify_csrf_token
+from chatbot_manager.security import decrypt_secret, encrypt_secret, make_csrf_token, make_session_token, mask_secret, read_session_token, verify_admin, verify_csrf_token
 from chatbot_manager.settings import get_settings
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
@@ -487,7 +487,7 @@ def assistant_page(
             "admin_email": admin_email,
             "active_page": "assistant",
             "settings": settings,
-            "masked_llm_api_key": mask_secret(settings.llm_api_key),
+            "masked_llm_api_key": mask_secret(decrypt_secret(settings.llm_api_key, get_settings().app_encryption_key)),
             "llm_models": LLM_MODELS,
             "vision_models": VISION_MODELS,
             "embedding_models": EMBEDDING_MODELS,
@@ -515,8 +515,10 @@ def update_assistant(
     settings.fallback_reply = fallback_reply
     settings.rag_enabled = rag_enabled == "on"
     settings.llm_base_url = llm_base_url
-    if llm_api_key.strip():
-        settings.llm_api_key = llm_api_key.strip()
+    encryption_key = get_settings().app_encryption_key
+    current_api_key = decrypt_secret(settings.llm_api_key, encryption_key)
+    plaintext_api_key = llm_api_key.strip() or current_api_key
+    settings.llm_api_key = encrypt_secret(plaintext_api_key, encryption_key)
     settings.llm_model = llm_model
     settings.vision_model = vision_model
     settings.embedding_model = embedding_model

@@ -5,9 +5,11 @@ from fastapi.testclient import TestClient
 from httpx import Response
 from sqlmodel import Session
 
+from chatbot_manager.channel_config import channel_credentials
 from chatbot_manager.channels.telegram import TELEGRAM_API
 from chatbot_manager.db import get_engine
 from chatbot_manager.models import Channel
+from chatbot_manager.settings import get_settings
 
 
 def login(client: TestClient) -> str:
@@ -162,7 +164,7 @@ def test_telegram_channel_config_can_be_saved(client: TestClient) -> None:
         assert channel is not None
         assert channel.provider == "telegram"
         assert channel.enabled is True
-        assert json.loads(channel.credential_json) == {
+        assert channel_credentials(session, get_settings(), "telegram") == {
             "bot_token": "tg-bot-token-123",
             "webhook_secret": "tg-secret-456",
         }
@@ -190,7 +192,7 @@ def test_telegram_channel_config_blank_keeps_existing(client: TestClient) -> Non
     with Session(get_engine()) as session:
         channel = session.get(Channel, 1)
         assert channel is not None
-        assert json.loads(channel.credential_json) == {
+        assert channel_credentials(session, get_settings(), "telegram") == {
             "bot_token": "tg-bot-token",
             "webhook_secret": "tg-secret",
         }

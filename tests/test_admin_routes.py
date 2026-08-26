@@ -6,6 +6,7 @@ import pytest
 from sqlmodel import Session
 
 from chatbot_manager.admin.routes import index_document_task, rag_service_from_assistant
+from chatbot_manager.channel_config import channel_credentials
 from chatbot_manager.db import get_engine
 from chatbot_manager.models import AssistantSettings, Channel, KnowledgeDocument
 from chatbot_manager.settings import get_settings
@@ -460,7 +461,7 @@ def test_channel_config_can_be_saved_and_masked(client: TestClient) -> None:
         assert channel is not None
         assert channel.provider == "line"
         assert channel.enabled is True
-        assert json.loads(channel.credential_json) == {
+        assert channel_credentials(session, get_settings(), "line") == {
             "channel_secret": "line-secret-123456",
             "channel_access_token": "line-token-654321",
         }
@@ -499,7 +500,7 @@ def test_channel_config_blank_secret_keeps_existing_value(client: TestClient) ->
     with Session(get_engine()) as session:
         channel = session.get(Channel, 1)
         assert channel is not None
-        assert json.loads(channel.credential_json) == {
+        assert channel_credentials(session, get_settings(), "line") == {
             "channel_secret": "line-secret",
             "channel_access_token": "new-line-token",
         }

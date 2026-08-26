@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_APP_SECRET_KEY = "change-me-very-secret-jwt-key-minimum-32-chars"
 DEFAULT_ADMIN_PASSWORD = "admin1234!"
+DEFAULT_ENCRYPTION_KEY = "local-dev-encryption-key-32-chars"
 
 
 class Settings(BaseSettings):
@@ -13,7 +14,7 @@ class Settings(BaseSettings):
 
     app_env: str = "local"
     app_secret_key: str = Field(default=DEFAULT_APP_SECRET_KEY)
-    app_encryption_key: str = "local-dev-encryption-key-32-chars"
+    app_encryption_key: str = DEFAULT_ENCRYPTION_KEY
     admin_email: str = "admin@example.local"
     admin_password: str = DEFAULT_ADMIN_PASSWORD
     admin_session_max_age_seconds: int = 28_800
@@ -52,6 +53,8 @@ def validate_deployment_settings(settings: Settings) -> None:
         unsafe.append("APP_SECRET_KEY")
     if settings.admin_password == DEFAULT_ADMIN_PASSWORD:
         unsafe.append("ADMIN_PASSWORD")
+    if settings.app_encryption_key == DEFAULT_ENCRYPTION_KEY:
+        unsafe.append("APP_ENCRYPTION_KEY")
     if not settings.cookie_secure:
         unsafe.append("COOKIE_SECURE")
     if unsafe:
