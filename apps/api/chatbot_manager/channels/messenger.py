@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 from typing import Any
 
 import httpx
@@ -14,9 +16,18 @@ class MessengerAdapter:
         self.app_secret = app_secret
 
     def verify(self, mode: str | None, token: str | None, challenge: str | None) -> str | None:
-        if mode == "subscribe" and token == self.verify_token and challenge is not None:
+        if self.verify_token and mode == "subscribe" and token == self.verify_token and challenge is not None:
             return challenge
         return None
+
+    def validate_signature(self, body: bytes, signature: str) -> bool:
+        if not self.app_secret or not signature.startswith("sha256="):
+            return False
+        supplied = signature.removeprefix("sha256=")
+        if not supplied:
+            return False
+        expected = hmac.new(self.app_secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, supplied)
 
     def parse_events(self, payload: dict[str, Any]) -> list[IncomingMessage]:
         messages: list[IncomingMessage] = []

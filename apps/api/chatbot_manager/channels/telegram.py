@@ -1,3 +1,4 @@
+import hmac
 from typing import Any
 
 import httpx
@@ -15,9 +16,9 @@ class TelegramAdapter:
         self.api_base = f"{TELEGRAM_API}{bot_token}"
 
     def validate_webhook(self, request_body: bytes, header_secret: str) -> bool:
-        if not self.webhook_secret:
-            return True
-        return bool(header_secret) and header_secret == self.webhook_secret
+        if not self.webhook_secret or not header_secret:
+            return False
+        return hmac.compare_digest(header_secret, self.webhook_secret)
 
     def parse_events(self, payload: dict[str, Any]) -> list[IncomingMessage]:
         messages: list[IncomingMessage] = []

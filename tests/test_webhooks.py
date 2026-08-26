@@ -15,6 +15,11 @@ def line_signature(body: bytes, secret: str) -> str:
     digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).digest()
     return base64.b64encode(digest).decode("utf-8")
 
+def messenger_signature(body: bytes, secret: str) -> str:
+    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return f"sha256={digest}"
+
+
 
 def login(client: TestClient) -> None:
     response = client.post(
@@ -31,8 +36,7 @@ def test_messenger_verification(client: TestClient) -> None:
         params={"hub.mode": "subscribe", "hub.verify_token": "", "hub.challenge": "challenge-1"},
     )
 
-    assert response.status_code == 200
-    assert response.text == "challenge-1"
+    assert response.status_code == 403
 
 
 def test_messenger_verification_uses_saved_channel_verify_token(client: TestClient) -> None:
@@ -63,16 +67,44 @@ def test_line_webhook_rejects_bad_signature(client: TestClient) -> None:
 
 
 def test_line_webhook_accepts_empty_events(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        session.add(
+            Channel(
+                provider="line",
+                enabled=True,
+                display_name="LINE",
+                credential_json='{"channel_secret": "db-secret", "channel_access_token": "db-token"}',
+            )
+        )
+        session.commit()
     body = b'{"events":[]}'
 
-    response = client.post("/webhooks/line", content=body, headers={"x-line-signature": line_signature(body, "")})
+    response = client.post("/webhooks/line", content=body, headers={"x-line-signature": line_signature(body, "db-secret")})
 
     assert response.status_code == 200
     assert response.json() == {"processed": 0}
 
 
 def test_messenger_webhook_accepts_empty_entries(client: TestClient) -> None:
-    response = client.post("/webhooks/messenger", json={"entry": []})
+    with Session(get_engine()) as session:
+        session.add(
+            Channel(
+                provider="messenger",
+                enabled=True,
+                display_name="Messenger",
+                credential_json='{"verify_token": "verify", "page_access_token": "page-token", "app_secret": "app-secret"}',
+            )
+        )
+        session.commit()
+    body = b'{"entry":[]}'
+    response = client.post(
+        "/webhooks/messenger",
+        content=body,
+        headers={
+            "content-type": "application/json",
+            "x-hub-signature-256": messenger_signature(body, "app-secret"),
+        },
+    )
 
     assert response.status_code == 200
     assert response.json() == {"processed": 0}
@@ -81,6 +113,16 @@ def test_messenger_webhook_accepts_empty_entries(client: TestClient) -> None:
 @respx.mock
 def test_line_webhook_processes_text_rule_and_logs(client: TestClient) -> None:
     login(client)
+    with Session(get_engine()) as session:
+        session.add(
+            Channel(
+                provider="line",
+                enabled=True,
+                display_name="LINE",
+                credential_json='{"channel_secret": "db-secret", "channel_access_token": "db-token"}',
+            )
+        )
+        session.commit()
     client.post(
         "/rules",
         data={"pattern": "price", "match_type": "contains", "reply_text": "Price is 100.", "priority": "10"},
@@ -92,7 +134,7 @@ def test_line_webhook_processes_text_rule_and_logs(client: TestClient) -> None:
         b'"message":{"type":"text","text":"price please"}}]}'
     )
 
-    response = client.post("/webhooks/line", content=body, headers={"x-line-signature": line_signature(body, "")})
+    response = client.post("/webhooks/line", content=body, headers={"x-line-signature": line_signature(body, "db-secret")})
 
     assert response.status_code == 200
     assert response.json() == {"processed": 1}

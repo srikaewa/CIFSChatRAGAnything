@@ -7,8 +7,8 @@ from chatbot_manager.channels.telegram import TelegramAdapter, TELEGRAM_API
 
 def test_validate_webhook_no_secret() -> None:
     adapter = TelegramAdapter(bot_token="token", webhook_secret="")
-    assert adapter.validate_webhook(b"{}", "") is True
-    assert adapter.validate_webhook(b"{}", "anything") is True
+    assert adapter.validate_webhook(b"{}", "") is False
+    assert adapter.validate_webhook(b"{}", "anything") is False
 
 
 def test_validate_webhook_with_secret() -> None:

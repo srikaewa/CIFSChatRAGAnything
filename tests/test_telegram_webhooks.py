@@ -64,9 +64,20 @@ def test_telegram_webhook_accepts_correct_secret(client: TestClient) -> None:
 
 
 def test_telegram_webhook_accepts_non_message_events(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        session.add(
+            Channel(
+                provider="telegram",
+                enabled=True,
+                display_name="Telegram",
+                credential_json=json.dumps({"bot_token": "token", "webhook_secret": "mysecret"}),
+            )
+        )
+        session.commit()
     response = client.post(
         "/webhooks/telegram",
         json={"update_id": 1},
+        headers={"X-Telegram-Bot-Api-Secret-Token": "mysecret"},
     )
 
     assert response.status_code == 200
@@ -79,8 +90,7 @@ def test_telegram_webhook_accepts_without_secret(client: TestClient) -> None:
         json={"update_id": 1},
     )
 
-    assert response.status_code == 200
-    assert response.json() == {"processed": 0}
+    assert response.status_code == 403
 
 
 @respx.mock
@@ -98,7 +108,7 @@ def test_telegram_webhook_processes_text_rule_and_logs(client: TestClient) -> No
                 provider="telegram",
                 enabled=True,
                 display_name="Telegram",
-                credential_json=json.dumps({"bot_token": "token", "webhook_secret": ""}),
+                credential_json=json.dumps({"bot_token": "token", "webhook_secret": "mysecret"}),
             )
         )
         session.commit()
@@ -114,6 +124,7 @@ def test_telegram_webhook_processes_text_rule_and_logs(client: TestClient) -> No
                 "text": "price please",
             },
         },
+        headers={"X-Telegram-Bot-Api-Secret-Token": "mysecret"},
     )
 
     assert response.status_code == 200

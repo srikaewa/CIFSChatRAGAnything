@@ -122,7 +122,11 @@ def messenger_verify(
 
 
 @router.post("/messenger")
-async def messenger_webhook(request: Request, session: Session = Depends(get_session)) -> dict[str, int]:
+async def messenger_webhook(
+    request: Request,
+    x_hub_signature_256: str = Header(default=""),
+    session: Session = Depends(get_session),
+) -> dict[str, int]:
     settings = get_settings()
     credentials = channel_credentials(session, settings, "messenger")
     adapter = MessengerAdapter(
@@ -130,6 +134,9 @@ async def messenger_webhook(request: Request, session: Session = Depends(get_ses
         credentials["page_access_token"],
         credentials["app_secret"],
     )
+    body = await request.body()
+    if not adapter.validate_signature(body, x_hub_signature_256):
+        raise HTTPException(status_code=401, detail="Invalid Messenger signature")
     payload = await request.json()
     messages = adapter.parse_events(payload)
     processed = await process_messages(messages, adapter.send_reply, session)
