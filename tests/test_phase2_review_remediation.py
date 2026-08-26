@@ -113,7 +113,7 @@ def test_telegram_setup_refuses_missing_webhook_secret(client: TestClient) -> No
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/channels?error=Telegram+webhook+secret+is+not+configured"
+    assert response.headers["location"] == "/channels?error=telegram_webhook_secret_missing"
 
 
 def test_disabled_provider_webhooks_do_not_process_events(client: TestClient) -> None:
