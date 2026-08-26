@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="page-head"><h1>Assistant</h1><p>Set the voice, fallback reply, and LLM connection.</p></section>
+{% if error %}<p class="alert alert-error">{{ error }}</p>{% endif %}
 <form class="panel form-grid" method="post" action="/assistant">
   <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
   <label class="wide">System prompt <textarea name="system_prompt" rows="6">{{ settings.system_prompt }}</textarea></label>
@@ -34,12 +35,11 @@
   <label>Notify channel
     <select name="admin_notify_channel">
       <option value="telegram" {{ "selected" if settings.admin_notify_channel == "telegram" else "" }}>Telegram</option>
-      <option value="" disabled>Messenger (coming soon)</option>
-      <option value="" disabled>LINE (coming soon)</option>
     </select>
   </label>
   <label>Notify chat ID
     <input name="admin_notify_chat_id" value="{{ settings.admin_notify_chat_id or '' }}" placeholder="Telegram chat ID (e.g. 123456789)">
+    <small>Phase 3 admin notifications support Telegram only. Leave blank to skip admin notification.</small>
   </label>
   <button type="submit">Save assistant</button>
 </form>

@@ -1,6 +1,8 @@
 import json
 import logging
+import re
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -47,18 +49,28 @@ def get_assistant_settings(session: Session) -> AssistantSettings:
     return settings
 
 
-async def _notify_admin(settings: Any, session: Session, message: IncomingMessage, rule_reply: str) -> None:
-    chat_id = getattr(settings, "admin_notify_chat_id", "")
+@dataclass(frozen=True)
+class AdminNotificationResult:
+    status: str
+    error_code: str = ""
+
+
+async def _notify_admin(
+    settings: Any, session: Session, message: IncomingMessage, rule_reply: str
+) -> AdminNotificationResult:
+    chat_id = str(getattr(settings, "admin_notify_chat_id", "") or "").strip()
     if not chat_id:
-        return
-    channel = getattr(settings, "admin_notify_channel", "telegram")
+        return AdminNotificationResult(status="skipped")
+    channel = str(getattr(settings, "admin_notify_channel", "telegram") or "").strip().lower()
     if channel != "telegram":
-        raise ValueError("Unsupported admin notification channel")
+        return AdminNotificationResult(status="failed", error_code="admin_notification_unsupported_channel")
+    if re.fullmatch(r"-?\d+", chat_id) is None:
+        return AdminNotificationResult(status="failed", error_code="admin_notification_invalid_destination")
     app_settings = get_settings()
     creds = channel_credentials(session, app_settings, "telegram")
     bot_token = creds.get("bot_token", "")
     if not bot_token:
-        raise RuntimeError("Telegram admin notification is not configured")
+        return AdminNotificationResult(status="failed", error_code="admin_notification_not_configured")
     adapter = TelegramAdapter(bot_token, "")
     text = (
         f"Need human help\n"
@@ -67,7 +79,16 @@ async def _notify_admin(settings: Any, session: Session, message: IncomingMessag
         f"Message: {message.text}\n"
         f"Rule: {rule_reply}"
     )
-    await adapter.send_reply({"chat_id": int(chat_id)}, text)
+    try:
+        await adapter.send_reply({"chat_id": int(chat_id)}, text)
+    except Exception as exc:
+        logger.error(
+            "Admin notification failed provider=%s error_type=%s",
+            message.provider,
+            type(exc).__name__,
+        )
+        return AdminNotificationResult(status="failed", error_code="admin_notification_failed")
+    return AdminNotificationResult(status="sent")
 
 
 def append_event_error(current: str, code: str) -> str:
@@ -114,14 +135,23 @@ async def process_messages(messages: list[IncomingMessage], sender: Sender, sess
 
         if decision.escalate:
             try:
-                await _notify_admin(settings, session, message, decision.rule_reply)
+                notification = await _notify_admin(settings, session, message, decision.rule_reply)
             except Exception as exc:
                 logger.error(
                     "Admin notification failed provider=%s error_type=%s",
                     message.provider,
                     type(exc).__name__,
                 )
-                event.error = append_event_error(event.error, "admin_notification_failed")
+                notification = AdminNotificationResult(
+                    status="failed", error_code="admin_notification_failed"
+                )
+            logger.info(
+                "Admin notification status provider=%s status=%s",
+                message.provider,
+                notification.status,
+            )
+            if notification.error_code:
+                event.error = append_event_error(event.error, notification.error_code)
 
         session.add(event)
         session.commit()

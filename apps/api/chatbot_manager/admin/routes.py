@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from pathlib import Path
 from pathlib import PurePath
 from uuid import uuid4
@@ -77,6 +78,18 @@ VISION_MODELS = [
 EMBEDDING_MODELS = [
     "text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002",
 ]
+
+SUPPORTED_ADMIN_NOTIFY_CHANNELS = {"telegram"}
+
+
+def validate_admin_notification_settings(channel: str, destination: str) -> tuple[str, str]:
+    normalized_channel = channel.strip().lower()
+    normalized_destination = destination.strip()
+    if normalized_channel not in SUPPORTED_ADMIN_NOTIFY_CHANNELS:
+        raise ValueError("unsupported_notification_channel")
+    if normalized_destination and re.fullmatch(r"-?\d+", normalized_destination) is None:
+        raise ValueError("invalid_notification_destination")
+    return normalized_channel, normalized_destination
 
 
 def require_admin(request: Request) -> str:
@@ -502,6 +515,7 @@ def delete_rule(
 @router.get("/assistant", response_class=HTMLResponse)
 def assistant_page(
     request: Request,
+    error: str | None = None,
     admin_email: str = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Response:
@@ -517,6 +531,10 @@ def assistant_page(
             "llm_models": LLM_MODELS,
             "vision_models": VISION_MODELS,
             "embedding_models": EMBEDDING_MODELS,
+            "error": {
+                "unsupported_notification_channel": "Only Telegram is supported for admin notifications.",
+                "invalid_notification_destination": "Telegram chat ID must be an integer.",
+            }.get(error or "", ""),
         },
     )
 
@@ -548,8 +566,17 @@ def update_assistant(
     settings.llm_model = llm_model
     settings.vision_model = vision_model
     settings.embedding_model = embedding_model
-    settings.admin_notify_channel = admin_notify_channel
-    settings.admin_notify_chat_id = admin_notify_chat_id
+    try:
+        notify_channel, notify_destination = validate_admin_notification_settings(
+            admin_notify_channel, admin_notify_chat_id
+        )
+    except ValueError as exc:
+        error_code = str(exc)
+        if error_code not in {"unsupported_notification_channel", "invalid_notification_destination"}:
+            error_code = "invalid_notification_destination"
+        return RedirectResponse(f"/assistant?error={error_code}", status_code=303)
+    settings.admin_notify_channel = notify_channel
+    settings.admin_notify_chat_id = notify_destination
     settings.updated_at = utc_now()
     session.add(settings)
     session.commit()

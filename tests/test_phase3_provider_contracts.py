@@ -11,7 +11,9 @@ from sqlmodel import Session
 
 from chatbot_manager.channel_config import resolve_channel
 from chatbot_manager.db import get_engine
-from chatbot_manager.models import Channel
+from chatbot_manager.channels.line import IncomingMessage
+from chatbot_manager.models import AssistantSettings, Channel
+from chatbot_manager.webhooks import _notify_admin
 from chatbot_manager.settings import get_settings
 
 
@@ -281,3 +283,109 @@ def test_messenger_webhook_processes_text_rule_end_to_end(client: TestClient) ->
     logs = client.get("/logs")
     assert "price please" in logs.text
     assert "Price is 100." in logs.text
+
+
+
+def assistant_form(csrf_token: str, channel: str, chat_id: str) -> dict[str, str]:
+    return {
+        "csrf_token": csrf_token,
+        "system_prompt": "Use docs.",
+        "fallback_reply": "Ask staff.",
+        "llm_base_url": "https://api.openai.com/v1",
+        "llm_model": "gpt-4o-mini",
+        "vision_model": "gpt-4o-mini",
+        "embedding_model": "text-embedding-3-small",
+        "admin_notify_channel": channel,
+        "admin_notify_chat_id": chat_id,
+    }
+
+
+def test_assistant_rejects_unsupported_notification_channel(client: TestClient) -> None:
+    csrf_token = login(client)
+    response = client.post(
+        "/assistant",
+        data=assistant_form(csrf_token, "line", "123"),
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assistant?error=unsupported_notification_channel"
+
+
+def test_assistant_rejects_non_integer_telegram_destination(client: TestClient) -> None:
+    csrf_token = login(client)
+    response = client.post(
+        "/assistant",
+        data=assistant_form(csrf_token, "telegram", "not-a-chat-id"),
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assistant?error=invalid_notification_destination"
+
+
+@pytest.mark.asyncio
+async def test_admin_notification_blank_destination_is_skipped(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        result = await _notify_admin(
+            AssistantSettings(admin_notify_channel="telegram", admin_notify_chat_id=""),
+            session,
+            IncomingMessage("line", "user-1", "help", {"reply_token": "r1"}, {}),
+            "Internal help reply",
+        )
+    assert result.status == "skipped"
+    assert result.error_code == ""
+
+
+@pytest.mark.asyncio
+async def test_admin_notification_invalid_destination_fails_safely(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        result = await _notify_admin(
+            AssistantSettings(admin_notify_channel="telegram", admin_notify_chat_id="abc"),
+            session,
+            IncomingMessage("line", "user-1", "help", {"reply_token": "r1"}, {}),
+            "Internal help reply",
+        )
+    assert result.status == "failed"
+    assert result.error_code == "admin_notification_invalid_destination"
+
+
+@pytest.mark.asyncio
+async def test_admin_notification_missing_bot_token_fails_safely(client: TestClient) -> None:
+    with Session(get_engine()) as session:
+        result = await _notify_admin(
+            AssistantSettings(admin_notify_channel="telegram", admin_notify_chat_id="123"),
+            session,
+            IncomingMessage("line", "user-1", "help", {"reply_token": "r1"}, {}),
+            "Internal help reply",
+        )
+    assert result.status == "failed"
+    assert result.error_code == "admin_notification_not_configured"
+
+
+@pytest.mark.asyncio
+async def test_admin_notification_valid_telegram_destination_is_sent(client: TestClient, monkeypatch) -> None:
+    sent: list[tuple[dict[str, object], str]] = []
+
+    async def fake_send(self, reply_context, text):
+        sent.append((reply_context, text))
+
+    monkeypatch.setattr("chatbot_manager.webhooks.TelegramAdapter.send_reply", fake_send)
+    with Session(get_engine()) as session:
+        session.add(
+            Channel(
+                provider="telegram",
+                enabled=True,
+                display_name="Telegram",
+                status="ready",
+                credential_json=json.dumps({"bot_token": "bot-token", "webhook_secret": "secret"}),
+            )
+        )
+        session.commit()
+        result = await _notify_admin(
+            AssistantSettings(admin_notify_channel="telegram", admin_notify_chat_id="-100123"),
+            session,
+            IncomingMessage("line", "user-1", "need human", {"reply_token": "r1"}, {}),
+            "Internal escalation reply",
+        )
+    assert result.status == "sent"
+    assert result.error_code == ""
+    assert sent[0][0] == {"chat_id": -100123}
