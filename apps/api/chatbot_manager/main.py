@@ -7,11 +7,13 @@ from fastapi.staticfiles import StaticFiles
 
 from .admin import router as admin_router
 from .db import init_db
+from .settings import get_settings, validate_deployment_settings
 from .webhooks import router as webhook_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    validate_deployment_settings(get_settings())
     init_db()
     yield
 

@@ -1,26 +1,29 @@
 import hmac
-from itsdangerous import BadSignature, URLSafeSerializer
+from itsdangerous import BadSignature, SignatureExpired, URLSafeSerializer, URLSafeTimedSerializer
 
 from .settings import get_settings
 
 
 def verify_admin(email: str, password: str) -> bool:
     settings = get_settings()
-    return email == settings.admin_email and password == settings.admin_password
+    email_matches = hmac.compare_digest(email, settings.admin_email)
+    password_matches = hmac.compare_digest(password, settings.admin_password)
+    return email_matches and password_matches
 
 
 def make_session_token(email: str) -> str:
-    serializer = URLSafeSerializer(get_settings().app_secret_key, salt="admin-session")
+    serializer = URLSafeTimedSerializer(get_settings().app_secret_key, salt="admin-session")
     return serializer.dumps({"email": email})
 
 
-def read_session_token(token: str | None) -> str | None:
+def read_session_token(token: str | None, max_age_seconds: int | None = None) -> str | None:
     if not token:
         return None
-    serializer = URLSafeSerializer(get_settings().app_secret_key, salt="admin-session")
+    settings = get_settings()
+    serializer = URLSafeTimedSerializer(settings.app_secret_key, salt="admin-session")
     try:
-        data = serializer.loads(token)
-    except BadSignature:
+        data = serializer.loads(token, max_age=max_age_seconds or settings.admin_session_max_age_seconds)
+    except (BadSignature, SignatureExpired):
         return None
     return str(data.get("email", ""))
 

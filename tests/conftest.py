@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("DATABASE_URL", "sqlite://")
 
     from chatbot_manager.db import reset_engine

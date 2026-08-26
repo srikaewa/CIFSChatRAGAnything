@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy import text
 
 
@@ -70,3 +71,23 @@ def test_sqlite_migration_adds_rag_doc_id_to_existing_knowledge_table(monkeypatc
         columns = {row[1] for row in connection.execute(text("PRAGMA table_info(knowledgedocument)")).all()}
 
     assert "rag_doc_id" in columns
+
+
+def test_app_startup_rejects_default_credentials_outside_local_or_test(monkeypatch) -> None:
+    from chatbot_manager.main import create_app
+    from chatbot_manager.settings import get_settings
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("COOKIE_SECURE", "true")
+    monkeypatch.delenv("APP_SECRET_KEY", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    get_settings.cache_clear()
+
+    app = create_app()
+    with pytest.raises(RuntimeError) as error:
+        with TestClient(app):
+            pass
+
+    assert "APP_SECRET_KEY" in str(error.value)
+    assert "ADMIN_PASSWORD" in str(error.value)
+    get_settings.cache_clear()

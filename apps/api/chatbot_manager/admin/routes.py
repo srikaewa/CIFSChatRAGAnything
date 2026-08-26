@@ -59,7 +59,8 @@ EMBEDDING_MODELS = [
 
 
 def require_admin(request: Request) -> str:
-    email = read_session_token(request.cookies.get("admin_session"))
+    settings = get_settings()
+    email = read_session_token(request.cookies.get("admin_session"), settings.admin_session_max_age_seconds)
     if not email:
         raise HTTPException(status_code=303, headers={"Location": "/login"})
     return email
@@ -84,7 +85,15 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
     if not verify_admin(email, password):
         return templates.TemplateResponse(request, "login.html", {"error": "Invalid login"}, status_code=401)
     response = RedirectResponse("/", status_code=303)
-    response.set_cookie("admin_session", make_session_token(email), httponly=True, samesite="lax")
+    settings = get_settings()
+    response.set_cookie(
+        "admin_session",
+        make_session_token(email),
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+        max_age=settings.admin_session_max_age_seconds,
+    )
     return response
 
 
