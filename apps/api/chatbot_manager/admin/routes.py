@@ -15,6 +15,7 @@ from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput, RESPONSE
 from chatbot_manager.db import get_session
 from chatbot_manager.models import AssistantSettings, ChatEvent, KnowledgeDocument, Rule, utc_now
 from chatbot_manager.channels.telegram import TelegramAdapter
+from chatbot_manager.admin.telegram_ops import discover_tailscale_host, run_funnel, service_port
 from chatbot_manager.rag.service import rag_service_from_assistant
 from chatbot_manager.security import decrypt_secret, encrypt_secret, make_csrf_token, make_session_token, mask_secret, read_session_token, verify_admin, verify_csrf_token
 from chatbot_manager.settings import get_settings
@@ -181,6 +182,20 @@ def channels_page(
             "saved": saved == "1",
             "error": {
                 "channel_save_failed": "Could not save channel settings. Check the configuration and retry.",
+                "telegram_credentials_missing": "Save Telegram channel credentials first.",
+                "telegram_bot_token_missing": "Telegram bot token is not configured.",
+                "telegram_webhook_secret_missing": "Telegram webhook secret is not configured.",
+                "invalid_public_url": "API public URL must be a valid http or https URL.",
+                "tailscale_cli_missing": "Tailscale CLI was not found on this host.",
+                "tailscale_timeout": "Tailscale command timed out. Check the local Tailscale service and retry.",
+                "tailscale_status_failed": "Could not read Tailscale status.",
+                "tailscale_status_invalid": "Tailscale returned invalid status data.",
+                "tailscale_dns_missing": "Could not determine this host's Tailscale DNS name.",
+                "tailscale_access_denied": "Tailscale Funnel access is denied. Configure a local Tailscale operator and retry.",
+                "tailscale_funnel_failed": "Tailscale Funnel command failed.",
+                "telegram_set_webhook_failed": "Telegram rejected the webhook configuration.",
+                "telegram_delete_webhook_failed": "Telegram could not disable the webhook.",
+                "tailscale_cleanup_failed": "Telegram webhook was disabled, but Tailscale Funnel cleanup failed.",
             }.get(error or "", error or ""),
         },
     )
@@ -232,46 +247,29 @@ async def telegram_setup_webhook(
     settings = get_settings()
     channel = get_channel(session, "telegram")
     if channel is None:
-        return RedirectResponse("/channels?error=Save+Telegram+channel+credentials+first", status_code=303)
+        return RedirectResponse("/channels?error=telegram_credentials_missing", status_code=303)
     credentials = channel_credentials(session, settings, "telegram")
     if not credentials.get("bot_token"):
-        return RedirectResponse("/channels?error=Telegram+bot+token+is+not+configured", status_code=303)
+        return RedirectResponse("/channels?error=telegram_bot_token_missing", status_code=303)
     if not credentials.get("webhook_secret"):
-        return RedirectResponse("/channels?error=Telegram+webhook+secret+is+not+configured", status_code=303)
-    adapter = TelegramAdapter(credentials["bot_token"], credentials["webhook_secret"])
-    import subprocess, json
+        return RedirectResponse("/channels?error=telegram_webhook_secret_missing", status_code=303)
     try:
-        result = subprocess.run(
-            ["tailscale", "status", "--json"],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode != 0:
-            return RedirectResponse(f"/channels?error=Tailscale+status+failed", status_code=303)
-        ts_status = json.loads(result.stdout)
-        dns_name = ts_status.get("Self", {}).get("DNSName", "")
-        if not dns_name:
-            return RedirectResponse(f"/channels?error=Could+not+determine+Tailscale+DNS+name", status_code=303)
-        funnel_host = dns_name.rstrip(".")
-    except FileNotFoundError:
-        return RedirectResponse(f"/channels?error=Tailscale+CLI+not+found", status_code=303)
-    except json.JSONDecodeError:
-        return RedirectResponse(f"/channels?error=Invalid+Tailscale+status+output", status_code=303)
-    port = settings.api_public_url.split(":")[-1] if ":" in settings.api_public_url else "8000"
+        port = service_port(settings.api_public_url)
+    except ValueError:
+        return RedirectResponse("/channels?error=invalid_public_url", status_code=303)
+    funnel_host, error = discover_tailscale_host()
+    if error:
+        return RedirectResponse(f"/channels?error={error}", status_code=303)
+    error = run_funnel("on", port)
+    if error:
+        return RedirectResponse(f"/channels?error={error}", status_code=303)
     funnel_url = f"https://{funnel_host}/webhooks/telegram"
-    funnel_result = subprocess.run(
-        ["sudo", "tailscale", "funnel", "--bg", port],
-        capture_output=True, text=True, timeout=15,
-    )
-    if funnel_result.returncode != 0:
-        detail = funnel_result.stderr.strip()
-        if "Access denied" in detail:
-            return RedirectResponse(f"/channels?error=Tailscale+funnel+failed:+Access+denied.+Run+sudo+tailscale+set+--operator=$USER", status_code=303)
-        return RedirectResponse(f"/channels?error=Tailscale+funnel+failed", status_code=303)
+    adapter = TelegramAdapter(credentials["bot_token"], credentials["webhook_secret"])
     wh_result = await adapter.set_webhook(funnel_url)
     if not wh_result.get("ok"):
-        return RedirectResponse(f"/channels?error=Telegram+setWebhook+failed", status_code=303)
+        return RedirectResponse("/channels?error=telegram_set_webhook_failed", status_code=303)
     update_channel_credentials(session, "telegram", {"webhook_url": funnel_url})
-    return RedirectResponse("/channels", status_code=303)
+    return RedirectResponse("/channels?saved=1", status_code=303)
 
 
 @router.post("/channels/telegram/disable-webhook")
@@ -283,19 +281,21 @@ async def telegram_disable_webhook(
     settings = get_settings()
     credentials = channel_credentials(session, settings, "telegram")
     if not credentials.get("bot_token"):
-        return RedirectResponse("/channels?error=Telegram+bot+token+is+not+configured", status_code=303)
-    adapter = TelegramAdapter(credentials["bot_token"], credentials["webhook_secret"])
+        return RedirectResponse("/channels?error=telegram_bot_token_missing", status_code=303)
+    adapter = TelegramAdapter(credentials["bot_token"], credentials.get("webhook_secret", ""))
     wh_result = await adapter.delete_webhook()
     if not wh_result.get("ok"):
-        return RedirectResponse(f"/channels?error=Telegram+deleteWebhook+failed", status_code=303)
-    import subprocess
-    port = settings.dashboard_url.split(":")[-1] if ":" in settings.dashboard_url else "8000"
-    subprocess.run(
-        ["sudo", "tailscale", "funnel", "off", port],
-        capture_output=True, text=True, timeout=15,
-    )
+        return RedirectResponse("/channels?error=telegram_delete_webhook_failed", status_code=303)
     update_channel_credentials(session, "telegram", {"webhook_url": ""})
-    return RedirectResponse("/channels", status_code=303)
+    try:
+        port = service_port(settings.api_public_url)
+    except ValueError:
+        return RedirectResponse("/channels?error=invalid_public_url", status_code=303)
+    error = run_funnel("off", port)
+    if error:
+        return RedirectResponse("/channels?error=tailscale_cleanup_failed", status_code=303)
+    return RedirectResponse("/channels?saved=1", status_code=303)
+
 
 
 
