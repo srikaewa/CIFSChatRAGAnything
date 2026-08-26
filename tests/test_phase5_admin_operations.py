@@ -94,3 +94,17 @@ def test_base_css_keeps_visible_focus_and_narrow_layout() -> None:
     css = Path("apps/api/chatbot_manager/static/styles.css").read_text(encoding="utf-8")
     assert ":focus-visible" in css
     assert "@media (max-width: 760px)" in css
+
+
+def test_readme_lists_each_webhook_once_and_links_operations() -> None:
+    text = Path("README.md").read_text(encoding="utf-8")
+    assert text.count("`/webhooks/line`") == 1
+    assert text.count("`/webhooks/messenger`") == 2
+    assert text.count("`/webhooks/telegram`") == 1
+    assert "docs/operations.md" in text
+
+
+def test_operations_guide_covers_windows_rag_backup_and_recovery() -> None:
+    text = Path("docs/operations.md").read_text(encoding="utf-8")
+    for phrase in ["WinError 206", "--basetemp", "Tailscale", "RAG", "Backup", "Restore"]:
+        assert phrase in text

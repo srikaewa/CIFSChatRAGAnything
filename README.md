@@ -2,73 +2,67 @@
 
 Local admin manager for LINE, Facebook Messenger, and Telegram chatbots with rule-first replies and RAG-Anything fallback.
 
-## Run
+## Quick start
 
 ```bash
-rtk uv sync
-rtk uv run uvicorn chatbot_manager.main:app --app-dir apps/api --reload --host 127.0.0.1 --port 8000
+uv sync
+uv run uvicorn chatbot_manager.main:app --app-dir apps/api --reload --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000`.
+Open `http://127.0.0.1:8000`. Copy `.env.example` to `.env` before configuring real providers. Local development defaults are for local-only use; production/non-local startup requires secure credentials.
 
-Default login:
+Default local login:
 
 - Email: `admin@example.local`
 - Password: `admin1234!`
 
-## Message Order
+## Message order
 
-1. Built-in commands: `help`, `start`
-2. Admin rules by priority
-3. RAG-Anything hybrid retrieval
-4. Fallback reply
+1. Built-in commands such as `help` and `start`.
+2. Enabled admin rules by priority.
+3. Escalation decision when configured.
+4. RAG-Anything retrieval when enabled and available.
+5. Fallback reply.
 
-## Admin Pages
+## Admin pages
 
 - Dashboard: channel and RAG status.
-- Channels: webhook URLs for LINE, Messenger, and Telegram.
-- Rules: keyword rules and replies.
-- Knowledge: upload documents for RAG-Anything indexing.
-- Graph: view RAG-Anything/LightRAG entities and relationships from the indexed knowledge base.
-- Assistant: system prompt, fallback reply, LLM base URL, API key, chat model, vision model, and embedding model.
-- Test Chat: simulate a user message before going live.
-- Logs: recent messages, answer source, and replies.
+- Channels: configure LINE, Messenger, and Telegram credentials and webhook state.
+- Rules: keyword/condition rules and replies.
+- Knowledge: upload, index, reindex, and delete documents.
+- Graph: inspect indexed entities and relationships.
+- Assistant: prompts, fallback, RAG/LLM settings, and Telegram admin-notification destination.
+- Test Chat: exercise the same decision engine without provider/admin-notification side effects.
+- Logs: recent messages, answer source, replies, and delivery/notification outcomes.
 
 ## Environment
 
-Copy `.env.example` to `.env` and fill channel and LLM values.
+Important settings are documented in `.env.example`. Real channels additionally require their provider credentials. Telegram webhook secret is configured through the Channels page together with the bot token. RAG answers require compatible LLM settings and the optional RAG/parser dependency stack.
 
-Required for real channels:
+For Windows short-path setup, RAG dependencies, Tailscale Funnel, backups, restore, and troubleshooting, see `docs/operations.md`.
 
-- `LINE_CHANNEL_SECRET`
-- `LINE_CHANNEL_ACCESS_TOKEN`
-- `MESSENGER_VERIFY_TOKEN`
-- `MESSENGER_PAGE_ACCESS_TOKEN`
-- `MESSENGER_APP_SECRET`
-- `TELEGRAM_BOT_TOKEN`
+## Webhooks and tunnels
 
-Required for RAG answers:
+| Channel | Method | Path | Purpose |
+|---|---|---|---|
+| LINE | `POST` | `/webhooks/line` | Events |
+| Messenger | `GET` | `/webhooks/messenger` | Verification |
+| Messenger | `POST` | `/webhooks/messenger` | Events |
+| Telegram | `POST` | `/webhooks/telegram` | Events |
 
-- `LLM_BASE_URL`
-- `LLM_API_KEY`
-- `LLM_DEFAULT_MODEL`
-- `LLM_VISION_MODEL`
-- `RAG_WORKING_DIR`
-- MinerU/RAG-Anything parser dependencies installed on host
+The application builds provider webhook URLs from `API_PUBLIC_URL`. External provider consoles therefore need a public HTTPS route to the local application.
 
-## Webhooks & Tunnels
+Telegram can optionally use Tailscale Funnel from the Channels page. The application invokes the local `tailscale` CLI directly and does not assume `sudo`; the local machine must already be authenticated and authorized to use Funnel.
 
-### Endpoints
+## Tests
 
-| Channel | Method | Path |
-|---|---|---|
-| LINE | `POST` | `/webhooks/line` |
-| Messenger | `GET` | `/webhooks/messenger` (verification) |
-| Messenger | `POST` | `/webhooks/messenger` (events) |
-| LINE | `POST` | `/webhooks/line` |
-| Messenger | `GET` | `/webhooks/messenger` (verification) |
-| Messenger | `POST` | `/webhooks/messenger` (events) |
+Use an explicit writable temp directory on Windows:
 
-LINE, Messenger, and Telegram use `API_PUBLIC_URL` from config. If testing from external developer tools, expose the local server through a tunnel and set `API_PUBLIC_URL` to the public URL.
+```powershell
+$root = (Get-Location).Path
+python -m pytest -q --basetemp "$env:TEMP\cifs-pytest"
+python -m compileall -q apps/api
+git diff --check
+```
 
-Telegram can also use Tailscale Funnel for automatic public HTTPS exposure. Click "Setup Webhook (Tailscale)" on the Channels page to enable it.
+See `docs/operations.md` for the short-path environment used when the optional full RAG stack hits Windows path-length limits.
