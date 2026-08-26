@@ -92,8 +92,8 @@ def test_authenticity_secrets_are_required_for_channel_readiness(client: TestCli
             incoming_credentials={"bot_token": "bot-token"},
         )
 
-        assert messenger.status == "not_configured"
-        assert telegram.status == "not_configured"
+        assert messenger.status == "incomplete"
+        assert telegram.status == "incomplete"
 
 
 def test_telegram_setup_refuses_missing_webhook_secret(client: TestClient) -> None:

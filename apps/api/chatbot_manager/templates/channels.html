@@ -23,7 +23,7 @@
       <code>{{ webhook_url }}</code>
       <button class="copy-btn" data-copy="{{ webhook_url }}" title="Copy webhook URL">Copy</button>
     </div>
-    <p>Status: {{ "Ready" if card.configured else "Not configured" }}</p>
+    <p>Status: {{ card.state | title }}</p>
     {% if is_telegram and telegram_webhook_active %}
     <div class="webhook-row">
       <code>{{ telegram_webhook_active }}</code>

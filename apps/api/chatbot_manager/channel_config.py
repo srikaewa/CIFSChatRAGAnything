@@ -22,6 +22,7 @@ class ResolvedChannel:
     provider: str
     enabled: bool
     configured: bool
+    state: str
     credentials: dict[str, str]
 
 
@@ -100,14 +101,25 @@ def channel_credentials(session: Session, settings: Settings, provider: str) -> 
     return credentials
 
 
+def channel_state(saved: Channel | None, enabled: bool, configured: bool) -> str:
+    if not enabled:
+        return "disabled"
+    if saved is not None and saved.status == "failed":
+        return "failed"
+    return "ready" if configured else "incomplete"
+
+
 def resolve_channel(session: Session, settings: Settings, provider: str) -> ResolvedChannel:
     definition = CHANNEL_DEFINITIONS[provider]
     saved = get_channel(session, provider)
     credentials = channel_credentials(session, settings, provider)
+    enabled = saved.enabled if saved is not None else True
+    configured = is_configured(credentials, definition.required_fields)
     return ResolvedChannel(
         provider=provider,
-        enabled=saved.enabled if saved is not None else True,
-        configured=is_configured(credentials, definition.required_fields),
+        enabled=enabled,
+        configured=configured,
+        state=channel_state(saved, enabled, configured),
         credentials=credentials,
     )
 
@@ -131,7 +143,8 @@ def save_channel(
     channel.enabled = enabled
     channel.display_name = definition.display_name
     channel.credential_json = json.dumps(encode_credentials(credentials, get_settings().app_encryption_key))
-    channel.status = "configured" if is_configured(credentials, definition.required_fields) else "not_configured"
+    configured = is_configured(credentials, definition.required_fields)
+    channel.status = "disabled" if not enabled else ("ready" if configured else "incomplete")
     channel.updated_at = utc_now()
     session.add(channel)
     session.commit()
@@ -148,7 +161,8 @@ def update_channel_credentials(session: Session, provider: str, updates: dict[st
         channel = Channel(provider=provider, display_name=definition.display_name)
     channel.display_name = definition.display_name
     channel.credential_json = json.dumps(encode_credentials(credentials, get_settings().app_encryption_key))
-    channel.status = "configured" if is_configured(credentials, definition.required_fields) else "not_configured"
+    configured = is_configured(credentials, definition.required_fields)
+    channel.status = "disabled" if not channel.enabled else ("ready" if configured else "incomplete")
     channel.updated_at = utc_now()
     session.add(channel)
     session.commit()
@@ -170,6 +184,7 @@ def channel_cards(session: Session, settings: Settings) -> list[dict[str, Any]]:
                 "display_name": definition.display_name,
                 "enabled": resolved.enabled,
                 "configured": resolved.configured,
+                "state": resolved.state,
                 "webhook_url": resolved.credentials.get("webhook_url", ""),
                 "masked": {
                     field: mask_secret(resolved.credentials.get(field, ""))
