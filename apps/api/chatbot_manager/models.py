@@ -55,6 +55,30 @@ class BotConfigRule(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class Credential(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    credential_type: str = Field(index=True)
+    encrypted_payload: str
+    created_at: datetime = Field(default_factory=utc_now)
+    rotated_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+
+
+class KnowledgeService(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True)
+    service_type: str = Field(default="lightrag", index=True)
+    api_base_url: str
+    webui_url: str = ""
+    credential_id: Optional[int] = Field(default=None, index=True)
+    enabled: bool = True
+    health_status: str = Field(default="unknown", index=True)
+    last_health_check: Optional[datetime] = None
+    metadata_json: str = "{}"
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class Channel(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     provider: str = Field(index=True, unique=True)
