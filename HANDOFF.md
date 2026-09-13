@@ -18,16 +18,29 @@ Core boundary:
 
 - CIFSChatbotManager becomes the chatbot control plane and operations console: Bots, behavior/rules, channels, conversations/handoff, Draft/Test/Publish, regression testing, monitoring, analytics, incidents, users/roles, and audit.
 - External RAG-Anything/LightRAG owns documents, parsing, indexing, graph/vector storage, Knowledge Graph, retrieval, document lifecycle, and final grounded answer generation.
-- One Bot configuration binds to one Knowledge Service at a time; many Bots may share the same service.
+- One `BotConfigVersion` binds to one Knowledge Service; Live and Draft may bind different services while many Bots share a service.
 - Knowledge binding lives on `BotConfigVersion`, not directly on `Bot`, so Draft can test a different service without changing production.
 - Encrypted credential handling begins in Phase 2 when the Knowledge Service Registry is introduced; it is not deferred to the later hardening phase.
 
 Status:
 
 - Sections 1–9 approved in chat.
-- Formal spec written and self-review completed in this session; placeholder, lifecycle, Knowledge binding, credential-phase, and migration-scope consistency were checked.
-- No redesign implementation code has started.
-- After explicit user approval of the written spec, invoke Superpowers `writing-plans` and implement phase-by-phase with TDD.
+- Formal written spec explicitly approved by the user on 2026-09-13.
+- Superpowers `writing-plans` completed as a master roadmap plus six phase plans.
+- No redesign production implementation code has started.
+- Planning self-review covers spec-to-phase coverage, placeholder removal, cross-phase interface naming, migration boundaries, and mandatory phase-end verification/handoff updates.
+
+Implementation plans:
+
+- `docs/superpowers/plans/2026-09-13-chatbot-operations-console-master-roadmap.md`
+- `docs/superpowers/plans/2026-09-13-phase-1-bot-foundation.md`
+- `docs/superpowers/plans/2026-09-13-phase-2-external-knowledge-service.md`
+- `docs/superpowers/plans/2026-09-13-phase-3-runtime-conversations.md`
+- `docs/superpowers/plans/2026-09-13-phase-4-draft-test-publish.md`
+- `docs/superpowers/plans/2026-09-13-phase-5-operations-monitoring.md`
+- `docs/superpowers/plans/2026-09-13-phase-6-multi-user-hardening-cleanup.md`
+
+Execution rule: every phase uses TDD, fresh focused/full verification, a manual checkpoint when applicable, and an updated `HANDOFF.md` before moving to the next phase.
 
 ## Recent Work
 
@@ -215,4 +228,6 @@ codex resume 019f3d30-3662-7a22-9526-4e3f0ac55d87
 
 ## Potential Next Step
 
-Review `docs/superpowers/specs/2026-09-13-chatbot-operations-console-redesign-design.md`. Do not start redesign implementation until the user explicitly approves the written spec. After that approval, invoke Superpowers `writing-plans` and create the phased implementation plan before touching production code.
+Choose the Superpowers execution mode for Phase 1 (`subagent-driven-development` recommended, or `executing-plans` inline), then start from `docs/superpowers/plans/2026-09-13-phase-1-bot-foundation.md`.
+
+Before Phase 1 implementation, capture a fresh baseline (`pytest`, lock check, compileall, `git diff --check`) and preserve the existing unrelated untracked tool/config files. Do not push planning or implementation commits unless the user explicitly requests a push for that integration step.
