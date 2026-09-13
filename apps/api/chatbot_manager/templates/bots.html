@@ -1,11 +1,27 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Bots</h1>
-{% for bot in bots %}
-<article>
-  <h2>{{ bot.name }}</h2>
-  <p>{{ bot.lifecycle_status|title }}</p>
-  <a href="/bots/{{ bot.id }}">Open Workspace</a>
-</article>
-{% endfor %}
+<section class="page-head">
+  <h1>Bots</h1>
+  <p>Manage chatbot workspaces. Phase 1 shows the migrated production Bot without changing live behavior.</p>
+</section>
+
+<section aria-label="Bot fleet">
+  {% for bot in bots %}
+  <article class="panel bot-card">
+    <div>
+      <div class="bot-card-heading">
+        <h2>{{ bot.name }}</h2>
+        <span class="status-chip">{{ bot.lifecycle_status|title }}</span>
+      </div>
+      <p>{{ bot.description or "Chatbot workspace" }}</p>
+    </div>
+    <a class="action-btn" href="/bots/{{ bot.id }}">Open Workspace</a>
+  </article>
+  {% else %}
+  <article class="panel">
+    <h2>No Bots</h2>
+    <p>No chatbot workspaces are available.</p>
+  </article>
+  {% endfor %}
+</section>
 {% endblock %}
