@@ -245,3 +245,13 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `f00fbdc` — `feat: bind bot drafts to knowledge services`.
 - Next: Task 5 retire local Knowledge/Graph management from normal navigation while preserving direct legacy routes.
 
+### Task 5 — Retire local Knowledge management from normal navigation COMPLETE
+
+- RED: `rtk uv run pytest -q tests/test_admin_routes.py tests/test_phase4_knowledge_graph.py` -> `1 failed, 30 passed`; only the new primary-navigation contract failed because the legacy Knowledge/Graph links were still present.
+- Primary navigation now exposes `Knowledge Services` and no longer links local `/knowledge` or `/knowledge-graph`.
+- Legacy local Knowledge/Graph routes and APIs remain implemented and directly reachable; route groups are marked as migration paths for removal only after Phase 6 dependency verification.
+- README now states the system boundary: external RAG-Anything/LightRAG owns documents, indexing, graph management, retrieval, and grounded answer generation; CIFS stores service bindings/credentials.
+- GREEN: `rtk uv run pytest -q tests/test_admin_routes.py tests/test_phase4_knowledge_graph.py tests/test_knowledge_services_admin.py` -> `38 passed in 2.10s`.
+- Task commit: `5cf0277` — `refactor: move knowledge management to external service`.
+- Next: Task 6 Phase 2 verification and authorized external-RAG checkpoint.
+
