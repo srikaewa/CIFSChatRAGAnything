@@ -57,3 +57,10 @@ def test_chat_event_timestamps_round_trip_as_naive_utc() -> None:
         event = session.exec(select(ChatEvent)).one()
 
     assert event.created_at.tzinfo is None
+
+
+def test_legacy_channel_and_event_allow_bot_link() -> None:
+    channel = Channel(provider="line", display_name="LINE", bot_id=7)
+    event = ChatEvent(provider="line", incoming_text="hello", decision_source="rule", bot_id=7)
+    assert channel.bot_id == 7
+    assert event.bot_id == 7
