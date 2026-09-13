@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ bot.name }}</h1>
+<p>{{ bot.lifecycle_status|title }}</p>
+{% if live %}<p>Live v{{ live.version_number }}</p>{% endif %}
+{% endblock %}

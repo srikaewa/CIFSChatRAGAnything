@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Bots</h1>
+{% for bot in bots %}
+<article>
+  <h2>{{ bot.name }}</h2>
+  <p>{{ bot.lifecycle_status|title }}</p>
+  <a href="/bots/{{ bot.id }}">Open Workspace</a>
+</article>
+{% endfor %}
+{% endblock %}
