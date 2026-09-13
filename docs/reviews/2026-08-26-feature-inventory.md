@@ -1,34 +1,53 @@
 # Feature Inventory
 
-Date: 2026-08-26
+Original review date: 2026-08-26
+Reconciled: 2026-09-13
+
+## Current Status
+
+The six-phase completion program is closed for the approved scope. `docs/reviews/2026-08-26-gap-register.md` records no remaining registered P0-P3 gaps.
+
+Fresh reconciliation evidence:
+
+- Full automated suite on 2026-09-13: **184 passed in 4.08s**.
+- `uv lock --check` on 2026-09-13: PASS; 175 packages resolved.
+- Latest real-browser Knowledge Graph verification: 2026-09-12 via JJ ACC managed Chrome.
+- Phase 6 release evidence remains recorded in `docs/reviews/2026-08-26-phase-6-release-verification.md`.
 
 Status definitions:
 
-- `complete`: implemented and freshly verified for the documented scope.
+- `complete`: implemented and verified for the documented release scope.
 - `partial`: meaningful implementation exists, but important behavior or controls are incomplete.
 - `broken`: a core requirement has a reproducible defect or unsafe behavior.
-- `unverified`: implementation exists without fresh behavioral evidence.
+- `unverified`: implementation exists without sufficient behavioral evidence.
 - `out-of-scope`: excluded by the approved phased design.
 
-| Area | Capability | Status | Implementation evidence | Test evidence | Documentation evidence | Target phase |
-|---|---|---|---|---|---|---|
-| Application | startup, health, database reset and migrations | complete | `main.py`, `db.py` | `test_app_boot.py`: 4 passing | README run instructions | none |
-| Authentication | login, signed session, logout, route protection | partial | `security.py`; `admin/routes.py:60-85` | login and redirect tests pass | Design requires authenticated local admin | 2 |
-| Channels | LINE inbound, signature, parsing, reply | partial | `channels/line.py`; `webhooks.py:86-101` | adapter and webhook tests pass | README lists LINE | 2 and 3 |
-| Channels | Messenger verification, inbound, parsing, reply | broken | `channels/messenger.py`; `webhooks.py:104-136` | current tests pass but do not require POST authenticity | README lists Messenger | 2 |
-| Channels | Telegram inbound, reply, configuration, webhook setup | partial | `channels/telegram.py`; `webhooks.py:139-156`; `admin/routes.py:170-240` | Telegram adapter and route tests pass | README describes Telegram and Tailscale Funnel | 2, 3, and 5 |
-| Engine | commands, priorities, match types, compound conditions | complete | `chatbot/engine.py:24-115` | engine suite passes | README decision order | none |
-| Engine | escalation reply and admin notification | partial | `chatbot/engine.py:46-50`; `webhooks.py:33-54` | decision behavior passes; notification failure behavior is untested | Assistant UI exposes notification destination | 3 |
-| RAG | configuration, query, fallback, indexing, reindexing | partial | `rag/service.py`; `admin/routes.py:575-598` | query/fallback pass; 3 indexing tests fail from stale key setup | README and design describe RAG-Anything | 2 and 3 |
-| Knowledge | upload, status, retry, delete | broken | `admin/routes.py:691-770` | 3 path-contract tests fail on Windows | Knowledge page is documented | 2 and 3 |
-| Graph | labels/API normalization, limits, graph page and controls | partial | `admin/routes.py:255-334`, `:636-688`; `knowledge_graph.html` | API tests pass; browser rendering has no fresh verification | HANDOFF reports prior API checks | 4 |
-| Admin | dashboard and channel configuration | partial | `admin/routes.py:88-168`; dashboard/channels templates | page, save, mask, and status tests pass | README lists dashboard and channels | 2 and 5 |
-| Admin | rules and assistant configuration | partial | `admin/routes.py:342-510`; rules/assistant templates | CRUD and settings tests pass | README lists rules and assistant | 2 and 5 |
-| Admin | Test Chat and logs | partial | `admin/routes.py:512-573` | rule answer and event logging test passes | README lists both pages | 3 and 5 |
-| Security | CSRF, cookie policy, secret storage, webhook authenticity | broken | no CSRF implementation; `channel_config.py:70-106`; `models.py:13-51`; `webhooks.py:124-136` | negative security coverage is incomplete | Approved design requires fail-closed controls | 2 |
-| Operations | Windows setup, dependency installation, tunnels, recovery | partial | `pyproject.toml`; Telegram subprocess setup | automated tests do not cover host setup | README lacks Windows path/temp guidance | 5 |
-| Documentation | endpoint and supported-feature accuracy | partial | README contains repeated LINE/Messenger rows and no Telegram table row | not applicable | `README.md` | 5 |
+| Area | Capability | Status | Current evidence | Closure phase |
+|---|---|---|---|---|
+| Application | startup, health, database reset and migrations | complete | `main.py`, `db.py`, `test_app_boot.py`; full suite green | existing / verified through Phase 6 |
+| Authentication | login, signed time-limited session, logout, route protection | complete | `security.py`, admin routes, `test_session_security.py`, admin route tests | Phase 2 |
+| Channels | LINE inbound authenticity, parsing, reply, provider readiness | complete | `channels/line.py`, `webhooks.py`, webhook/provider contract tests | Phases 2-3 |
+| Channels | Messenger verification, signed inbound authenticity, parsing, reply | complete | `channels/messenger.py`, `webhooks.py`, `test_webhook_security.py`, provider contract tests | Phases 2-3 |
+| Channels | Telegram inbound, reply, configuration, webhook/Tailscale operations | complete | `channels/telegram.py`, `admin/telegram_ops.py`, Telegram channel/webhook/admin tests | Phases 2, 3, 5-6 |
+| Engine | commands, priorities, match types, compound conditions | complete | `chatbot/engine.py`, `test_chatbot_engine.py` | existing / verified through Phase 6 |
+| Engine | escalation reply and Telegram admin notification outcomes | complete | shared engine/webhook flow, validated destination handling, provider contract tests | Phase 3 |
+| RAG | configuration, query, fallback, indexing and reindexing behavior | complete | `rag/service.py`, `test_rag_service.py`, knowledge/admin regression tests; live external service remains an optional deployment smoke check | Phases 2-3 |
+| Knowledge | bounded upload, status, retry, safe delete/recovery | complete | admin routes, `test_knowledge_safety.py`, Phase 2/3 verification | Phases 2-3 |
+| Graph | labels/API normalization, graph limits, Cytoscape page and controls | complete | `test_phase4_knowledge_graph.py`, admin tests, real browser verification on 2026-09-12 | Phase 4 + 2026-09-12 follow-up |
+| Admin | dashboard and channel configuration | complete | admin routes/templates, `test_admin_routes.py`, Phase 5 responsive/browser checks | Phases 2 and 5 |
+| Admin | rules and assistant configuration | complete | admin routes/templates and CRUD/settings regression tests | Phases 2 and 5 |
+| Admin | Test Chat and event logs | complete | shared decision engine path, admin route/engine tests | Phases 3 and 5 |
+| Security | CSRF, cookie/session policy, encrypted secret storage, webhook authenticity/fail-closed behavior | complete | CSRF/session/secret/webhook security suites and Phase 2 verification | Phase 2 |
+| Operations | Windows setup, dependency installation guidance, Telegram/Tailscale portability, backup/recovery | complete | `docs/operations.md`, Telegram operations tests, Phase 5 verification | Phase 5-6 |
+| Documentation | endpoints, supported providers, operations and release evidence | complete | `README.md`, `docs/operations.md`, Phase 5/6 review and release documents | Phase 5-6 |
 
-## Out-of-Scope Capabilities
+## Remaining Limitations / Out-of-Scope Capabilities
 
-Multi-tenancy, billing, organization RBAC, new providers, replacement of the FastAPI/Jinja/SQLite architecture, and production infrastructure expansion remain out of scope.
+These are not registered defects in the approved completion scope:
+
+- The application remains a local/single-admin SQLite deployment.
+- Multi-tenancy, billing, and organization RBAC are out of scope.
+- Supported messaging providers remain LINE, Messenger, and Telegram.
+- Admin escalation notification remains Telegram-only.
+- Live provider, RAG/LLM, and Tailscale services are covered by mocked automated verification; authorized non-production deployment smoke checks remain optional.
+- Replacement of FastAPI, Jinja, SQLModel/SQLite, and production infrastructure expansion remain out of scope.

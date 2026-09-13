@@ -55,6 +55,18 @@ A manual release review found three pre-merge issues and all were remediated bef
 
 Three regression tests were added for these behaviors. The full warning-enabled suite now contains **184 passing tests**.
 
+## Post-RC Reconciliation — 2026-09-13
+
+A follow-up repository reconciliation was performed after the Knowledge Graph browser-verification handoff:
+
+- The gap register still has **0 open P0-P3 gaps**.
+- A real-browser Knowledge Graph verification was completed on 2026-09-12 with JJ ACC managed Chrome, covering nonblank Cytoscape render, entity/depth/max-node controls, search/type filters, layout switching, node and edge detail selection, and one-hop expansion.
+- The full automated suite was rerun on 2026-09-13: **184 passed in 4.08s**.
+- `uv lock --check` passed on 2026-09-13; the current lock resolves 175 packages.
+- Two test-hermeticity improvements remain as working-tree changes: `tests/test_session_security.py` isolates the production-default settings assertion from `.env`, and `tests/test_rag_service.py` prevents LightRAG's import-time `.env` load from contaminating later tests. No production behavior was changed by those fixes.
+- The feature inventory was reconciled with the completed Phase 2-6 evidence and the 2026-09-12 Knowledge Graph browser verification.
+- Repository-wide executable-bit/CRLF churn was reviewed separately from real content changes; proven noise was discarded without changing application behavior.
+
 ## External-service verification
 
 Automated release verification uses mocks for LINE, Messenger, Telegram, RAG/LLM, and Tailscale behavior. No production credentials were used and no provider webhook or public tunnel was changed.
@@ -76,4 +88,4 @@ Optional deployment smoke checks after integration, using authorized non-product
 
 ## Integration state
 
-The release candidate is on a local Git branch/worktree only. It has not been merged, pushed, tagged, or published.
+The completion/release series is present on local `main`. During the 2026-09-13 reconciliation, local `main` was **38 commits ahead of `origin/main`**. This cleanup did not push, tag, or publish anything.

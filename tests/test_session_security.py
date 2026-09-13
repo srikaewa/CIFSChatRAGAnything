@@ -14,7 +14,7 @@ def test_session_tokens_expire_and_reject_tampering() -> None:
 
 
 def test_production_settings_default_to_secure_cookies() -> None:
-    settings = Settings(app_env="production")
+    settings = Settings(app_env="production", _env_file=None)
 
     assert settings.cookie_secure is True
 

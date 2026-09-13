@@ -195,6 +195,11 @@ async def test_answer_uses_hybrid_query_and_strips_result(tmp_path: Path) -> Non
 def test_build_client_passes_required_raganything_functions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
+    # LightRAG loads `.env` at import time. Keep this unit test isolated from
+    # the repository developer environment so it cannot leak values into
+    # os.environ for tests that run later in the same process.
+    monkeypatch.chdir(tmp_path)
+
     class FakeConfig:
         def __init__(self, **kwargs: object) -> None:
             captured["config_kwargs"] = kwargs
