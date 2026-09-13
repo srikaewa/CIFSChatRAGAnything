@@ -255,3 +255,18 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `5cf0277` — `refactor: move knowledge management to external service`.
 - Next: Task 6 Phase 2 verification and authorized external-RAG checkpoint.
 
+### Task 6 — Phase 2 verification and external-RAG checkpoint
+
+**Implementation/local verification COMPLETE; real authorized deployment smoke PENDING because no external deployment configuration is available in this workspace.**
+
+- Deployment discovery: Phase 2 worktree contains no `.env`; read-only inspection of the existing development DB showed it predates Phase 2 and has no `knowledgeservice` table/registered external endpoint. No real endpoint/version/API key was available to verify, so no external success was fabricated.
+- Upstream adapter contract was re-checked against current official LightRAG documentation during Task 2: `GET /health`, `POST /query`, optional `X-API-Key`, `user_prompt`, `conversation_history`, and references match the adapter. External deployments used here must meet the approved LightRAG security floor `>=1.5.5`; the legacy local `uv.lock` still contains `lightrag-hku 1.5.4`, but the new external HTTP adapter does not depend on that library.
+- Focused verification: `rtk uv run pytest -q tests/test_credentials.py tests/test_knowledge_client.py tests/test_knowledge_services_admin.py tests/test_bot_admin.py tests/test_secret_encryption.py tests/test_failure_handling.py` -> `33 passed in 1.51s`.
+- Full verification: `rtk uv run pytest -q` -> `217 passed in 6.14s`; `rtk uv run python -m compileall -q apps/api` -> exit 0; `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`); `/usr/bin/git diff --check` -> exit 0 (JJ ACC direct `git diff --check` safety gate was unavailable, and `rtk git` is unsupported).
+- Isolated migration/UI checkpoint used `/tmp/cifs-phase2-manual.sqlite3`, copied from the development DB; the real DB was only inspected read-only and was not modified.
+- Disposable local LightRAG-compatible endpoint required the configured API key, returned Healthy from `/health`, returned a grounded answer plus `manual-guide.pdf` reference from `/query`, and exposed `/webui`.
+- Browser UI verified: primary nav shows `Knowledge Services` and no local Upload/Graph links; created service shows masked key `man...key`; Test Connection -> Healthy; Test Retrieval -> grounded answer + reference; external manager endpoint reachable; Default Bot / Knowledge saved the service to Draft.
+- Copied-DB verification after UI binding: Default Bot `live_config_version_id=1`, `draft_config_version_id=2`; Live v1 is `published` with `knowledge_service_id=None`; Draft v2 is `draft` with `knowledge_service_id=1`; credential payload starts `enc:v1:` and does not contain the plaintext API key.
+- Remaining deployment checkpoint: when an authorized real LightRAG/RAG-Anything endpoint is available, record its exact version, verify its `/health` + `/query` paths/auth without printing the key, then repeat Test Connection/Test Retrieval against that endpoint.
+- Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-3-runtime-conversations.md`.
+
