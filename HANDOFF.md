@@ -234,3 +234,14 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `6b9f607` — `feat: add knowledge service registry`.
 - Next: Task 4 bind Bot Drafts to Knowledge Services.
 
+### Task 4 — Bind Bot Drafts to Knowledge Services COMPLETE
+
+- RED: `rtk uv run pytest -q tests/test_bot_admin.py` -> `3 failed, 5 passed`; all new failures were expected 404s because the Bot Knowledge route did not exist.
+- Added `GET/POST /bots/{bot_id}/knowledge` and `bot_knowledge.html`.
+- POST validates the selected enabled Knowledge Service, calls `ensure_draft_config()`, and writes `knowledge_service_id` to the Draft only.
+- Live configuration is never changed by this route; disabled services are rejected before a Draft is created.
+- Bot Knowledge view shows Live/Draft bindings, service health, external RAG manager link, and a Test Retrieval entry point.
+- GREEN: `rtk uv run pytest -q tests/test_bot_admin.py tests/test_bot_foundation.py` -> `13 passed in 1.03s`.
+- Task commit: `f00fbdc` — `feat: bind bot drafts to knowledge services`.
+- Next: Task 5 retire local Knowledge/Graph management from normal navigation while preserving direct legacy routes.
+
