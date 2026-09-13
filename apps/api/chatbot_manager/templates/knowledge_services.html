@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+  <h1>Knowledge Services</h1>
+  <p>Register external LightRAG services. Documents, indexing, and graph management stay in the external RAG manager.</p>
+</section>
+
+{% if saved %}
+<p class="alert alert-success" role="status">Knowledge Service saved.</p>
+{% elif tested %}
+<p class="alert alert-success" role="status">Knowledge Service connection is healthy.</p>
+{% elif error %}
+<p class="alert alert-error" role="alert">{{ error }}</p>
+{% endif %}
+
+<section class="panel knowledge-service-create" aria-labelledby="add-knowledge-service">
+  <h2 id="add-knowledge-service">Add Knowledge Service</h2>
+  <form class="form-grid" method="post" action="/knowledge-services">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+    <label>Name
+      <input name="name" required placeholder="CIFS General RAG">
+    </label>
+    <label>API base URL
+      <input name="api_base_url" type="url" required placeholder="https://rag.example.test">
+    </label>
+    <label class="wide">RAG manager URL
+      <input name="webui_url" type="url" placeholder="https://rag.example.test/webui">
+    </label>
+    <label class="wide">API key
+      <input name="api_key" type="password" autocomplete="new-password" placeholder="Optional API key">
+    </label>
+    <button type="submit">Add Knowledge Service</button>
+  </form>
+</section>
+
+<section class="knowledge-service-list" aria-label="Registered Knowledge Services">
+  {% for card in cards %}
+  {% set service = card.service %}
+  <article class="panel knowledge-service-card">
+    <div class="knowledge-service-heading">
+      <div>
+        <h2>{{ service.name }}</h2>
+        <p>{{ service.service_type|title }} · <code>{{ service.api_base_url }}</code></p>
+      </div>
+      <span class="status-chip">{{ service.health_status|replace('_', ' ')|title }}</span>
+    </div>
+
+    <dl class="knowledge-service-meta">
+      <div><dt>Status</dt><dd>{{ "Enabled" if service.enabled else "Disabled" }}</dd></div>
+      <div><dt>Credential</dt><dd>{{ card.masked_api_key or "Not set" }}</dd></div>
+      <div><dt>Last health check</dt><dd>{{ service.last_health_check or "Not tested" }}</dd></div>
+    </dl>
+
+    {% if service.webui_url %}
+    <p class="knowledge-service-external-link">
+      <a class="action-btn" href="{{ service.webui_url }}" target="_blank" rel="noopener noreferrer">Open RAG Manager</a>
+    </p>
+    {% endif %}
+
+    <form class="form-grid knowledge-service-edit" method="post" action="/knowledge-services/{{ service.id }}/update">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <label>Name
+        <input name="name" value="{{ service.name }}" required>
+      </label>
+      <label>API base URL
+        <input name="api_base_url" type="url" value="{{ service.api_base_url }}" required>
+      </label>
+      <label class="wide">RAG manager URL
+        <input name="webui_url" type="url" value="{{ service.webui_url }}">
+      </label>
+      <label class="wide">API key
+        <input name="api_key" type="password" autocomplete="new-password" placeholder="Leave blank to keep current key">
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="enabled" {{ "checked" if service.enabled else "" }}>
+        Enable this Knowledge Service
+      </label>
+      <button type="submit">Save</button>
+    </form>
+
+    <div class="knowledge-service-actions">
+      <form method="post" action="/knowledge-services/{{ service.id }}/test">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <button type="submit" class="action-btn">Test Connection</button>
+      </form>
+      <form class="knowledge-retrieval-form" method="post" action="/knowledge-services/{{ service.id }}/test-retrieval">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <label>
+          <span>Test Retrieval</span>
+          <input name="query" required placeholder="Ask a harmless knowledge question">
+        </label>
+        <button type="submit" class="action-btn">Run Test</button>
+      </form>
+    </div>
+
+    {% if retrieval_result and retrieval_result.service_id == service.id %}
+    <section class="knowledge-test-result" aria-label="Retrieval test result">
+      <h3>Test Retrieval Result</h3>
+      <p><strong>Question:</strong> {{ retrieval_result.query }}</p>
+      <p>{{ retrieval_result.text }}</p>
+      <p><small>Latency: {{ retrieval_result.latency_ms }} ms</small></p>
+      {% if retrieval_result.references %}
+      <ul>
+        {% for ref in retrieval_result.references %}
+        <li>{{ ref.get('file_name') or ref.get('file_path') or ref }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+    {% endif %}
+  </article>
+  {% else %}
+  <article class="panel">
+    <h2>No Knowledge Services</h2>
+    <p>Add an external LightRAG service to begin testing connectivity.</p>
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}
