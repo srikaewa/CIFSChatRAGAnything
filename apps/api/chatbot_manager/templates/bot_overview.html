@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="bot-workspace-header">
+  <div>
+    <p class="eyebrow">Phase 1 migration view</p>
+    <h1>{{ bot.name }}</h1>
+    <p>{{ bot.description }}</p>
+  </div>
+  <span class="status-chip">{{ bot.lifecycle_status|title }}</span>
+</section>
+
+<section class="grid" aria-label="Bot configuration summary">
+  <article class="panel">
+    <h2>Configuration</h2>
+    {% if live %}
+    <p><strong>Live v{{ live.version_number }}</strong> · {{ live.status|title }}</p>
+    {% else %}
+    <p>No live configuration.</p>
+    {% endif %}
+  </article>
+
+  <article class="panel">
+    <h2>System prompt</h2>
+    <p>{{ live.system_prompt if live else "Not configured" }}</p>
+  </article>
+
+  <article class="panel">
+    <h2>Fallback reply</h2>
+    <p>{{ live.fallback_reply if live else "Not configured" }}</p>
+  </article>
+</section>
+
+<section class="panel bot-workspace-note">
+  <h2>Read-only foundation</h2>
+  <p>Phase 1 exposes migrated production configuration for verification only. Draft editing and publish controls arrive in a later phase.</p>
+</section>
+{% endblock %}

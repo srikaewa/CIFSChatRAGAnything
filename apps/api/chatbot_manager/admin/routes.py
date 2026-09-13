@@ -7,7 +7,6 @@ from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from chatbot_manager.channel_config import CHANNEL_DEFINITIONS, channel_cards, channel_credentials, get_channel, save_channel, update_channel_credentials
@@ -15,14 +14,13 @@ from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput, RESPONSE
 from chatbot_manager.db import get_session
 from chatbot_manager.models import AssistantSettings, ChatEvent, KnowledgeDocument, Rule, utc_now
 from chatbot_manager.channels.telegram import TelegramAdapter
+from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
 from chatbot_manager.admin.telegram_ops import discover_tailscale_host, run_funnel, service_port
 from chatbot_manager.rag.service import rag_service_from_assistant
-from chatbot_manager.security import decrypt_secret, encrypt_secret, make_csrf_token, make_session_token, mask_secret, read_session_token, verify_admin, verify_csrf_token
+from chatbot_manager.security import decrypt_secret, encrypt_secret, make_session_token, mask_secret, verify_admin
 from chatbot_manager.settings import get_settings
 
 logger = logging.getLogger(__name__)
-templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
-templates.env.globals["csrf_token_for"] = make_csrf_token
 router = APIRouter()
 SUPPORTED_KNOWLEDGE_EXTENSIONS = {
     ".bmp",
@@ -91,23 +89,6 @@ def validate_admin_notification_settings(channel: str, destination: str) -> tupl
     if normalized_destination and re.fullmatch(r"-?\d+", normalized_destination) is None:
         raise ValueError("invalid_notification_destination")
     return normalized_channel, normalized_destination
-
-
-def require_admin(request: Request) -> str:
-    settings = get_settings()
-    email = read_session_token(request.cookies.get("admin_session"), settings.admin_session_max_age_seconds)
-    if not email:
-        raise HTTPException(status_code=303, headers={"Location": "/login"})
-    return email
-
-
-def require_csrf(
-    csrf_token: str = Form(""),
-    admin_email: str = Depends(require_admin),
-) -> str:
-    if not verify_csrf_token(csrf_token, admin_email):
-        raise HTTPException(status_code=403, detail="Invalid CSRF token")
-    return admin_email
 
 
 @router.get("/login", response_class=HTMLResponse)
