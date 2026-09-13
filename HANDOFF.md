@@ -198,3 +198,16 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 2. Keep the worktree for review/integration unless explicitly asked to remove it.
 3. Next implementation phase: `docs/superpowers/plans/2026-09-13-phase-2-external-knowledge-service.md`.
 4. Before Phase 2 coding, read this handoff, the design spec, and the Phase 2 plan, then follow the same isolated-worktree + TDD workflow.
+## Phase 2 Execution Progress — 2026-09-13
+
+### Task 1 — Credential and Knowledge Service persistence COMPLETE
+
+- Worktree: `.worktrees/phase-2-external-knowledge-service` on `feat/phase-2-external-knowledge-service`.
+- Baseline before Phase 2 changes: `195 passed in 5.17s`.
+- RED: `tests/test_credentials.py` failed 2 tests because `chatbot_manager.credentials` and the new persistence contract did not exist.
+- Added `Credential` and `KnowledgeService` SQLModel tables.
+- Added canonical-JSON encrypted credential storage, read, masking, and replace/rotation helpers in `credentials.py`.
+- GREEN: `rtk uv run pytest -q tests/test_credentials.py tests/test_secret_encryption.py` -> `6 passed in 0.44s`.
+- Task commit: `543bb6d` — `feat: add encrypted knowledge service credentials`.
+- Next: Task 2 external Knowledge Service client contract.
+
