@@ -25,6 +25,14 @@ def login(client: TestClient) -> str:
     return page.text.split(marker, 1)[1].split('"', 1)[0]
 
 
+def test_primary_navigation_uses_knowledge_services_not_local_knowledge(client: TestClient) -> None:
+    login(client)
+    html = client.get("/").text
+    assert 'href="/knowledge-services"' in html
+    assert 'href="/knowledge"' not in html
+    assert 'href="/knowledge-graph"' not in html
+
+
 def test_dashboard_redirects_to_login(client: TestClient) -> None:
     response = client.get("/", follow_redirects=False)
 

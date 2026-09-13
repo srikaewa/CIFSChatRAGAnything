@@ -1,6 +1,6 @@
 # Chatbot Manager
 
-Local admin manager for LINE, Facebook Messenger, and Telegram chatbots with rule-first replies and RAG-Anything fallback.
+Bot-centric operations console for LINE, Facebook Messenger, and Telegram chatbots. CIFS manages bot behavior, channels, operations, and external Knowledge Service bindings; RAG-Anything/LightRAG owns documents, indexing, knowledge graphs, retrieval, and grounded answer generation.
 
 ## Quick start
 
@@ -29,8 +29,8 @@ Default local login:
 - Dashboard: channel and RAG status.
 - Channels: configure LINE, Messenger, and Telegram credentials and webhook state.
 - Rules: keyword/condition rules and replies.
-- Knowledge: upload, index, reindex, and delete documents.
-- Graph: inspect indexed entities and relationships.
+- Knowledge Services: register external RAG-Anything/LightRAG endpoints, test connectivity/retrieval, and manage encrypted service credentials.
+- Knowledge files, indexing, reindexing, deletion, and knowledge-graph management are performed in the external RAG WebUI; CIFS stores only service bindings and credentials.
 - Assistant: prompts, fallback, RAG/LLM settings, and Telegram admin-notification destination.
 - Test Chat: exercise the same decision engine without provider/admin-notification side effects.
 - Logs: recent messages, answer source, replies, and delivery/notification outcomes.

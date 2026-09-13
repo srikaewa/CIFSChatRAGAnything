@@ -676,6 +676,7 @@ async def index_document_task(document_id: int, path: str, reindex: bool = False
         session.commit()
 
 
+# Legacy migration path; remove after Phase 6 dependency verification.
 @router.get("/knowledge", response_class=HTMLResponse)
 def knowledge_page(
     request: Request,
@@ -721,6 +722,7 @@ def knowledge_documents_api(
     }
 
 
+# Legacy migration path; remove after Phase 6 dependency verification.
 @router.get("/knowledge-graph", response_class=HTMLResponse)
 def knowledge_graph_page(request: Request, admin_email: str = Depends(require_admin)) -> Response:
     return templates.TemplateResponse(
