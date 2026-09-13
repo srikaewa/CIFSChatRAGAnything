@@ -39,16 +39,41 @@ Phase plans:
 
 Planning self-review completed: no TODO/TBD/FIXME or placeholder test bodies remained, and the plan set was checked for spec coverage and interface/type consistency.
 
-## Current Redesign Status — START HERE IN NEXT CHAT
+## Current Redesign Status — PHASE 1 COMPLETE
 
 - Design/spec commit: `98afaec` — `docs: design chatbot operations console redesign`
 - Planning commit: `b8e40cc` — `docs: plan chatbot operations console implementation`
+- Phase execution starting point on `main`: `193380c` — `docs: hand off phase 1 execution`
 - The user selected **Execution option 2: Inline Execution**.
-- Superpowers `executing-plans` was loaded and the next implementation target is **Phase 1 — Bot Foundation & Migration**.
-- **No redesign production code has been implemented yet.**
-- **Do not implement directly on `main`.** Superpowers requires an isolated Git worktree before starting execution.
-- A native JJ_ACC `git_worktree_spawn` dry-run was performed only; **no worktree was actually created** in the prior chat.
-- The new chat should first create an isolated worktree from current `HEAD`, then execute `docs/superpowers/plans/2026-09-13-phase-1-bot-foundation.md` task-by-task using TDD and the `executing-plans` workflow.
+- Superpowers `executing-plans`, `using-git-worktrees`, and TDD workflows are active.
+- Isolated JJ_ACC-owned worktree created at `.worktrees/agent-0e3daf86` and registered as workspace `CIFSChatbotManager Phase1 Worktree`.
+- Baseline inside the worktree: `184 passed in 4.77s`.
+- **Task 1 completed**: Bot/config-version models plus nullable legacy `Channel.bot_id` / `ChatEvent.bot_id` links.
+- Task 1 commit: `64a02eb` — `feat: add bot configuration models`.
+- Task 1 focused verification: `6 passed in 0.17s`.
+- **Task 2 completed**: idempotent Default Bot bootstrap, published v1 migration, legacy Rule/Channel/ChatEvent attachment, Draft clone helper, and SQLite bot-link migration/startup bootstrap.
+- Task 2 commit: `c651bd6` — `feat: migrate current data into default bot`.
+- Task 2 focused verification: `10 passed in 0.22s`.
+- **Task 3 completed**: shared admin auth/template dependencies extracted; `/bots` and `/bots/{id}` added; admin routers composed without changing legacy URLs.
+- Task 3 commit: `d6f0957` — `feat: add bot workspace routes`.
+- Task 3 focused verification: `39 passed in 1.73s`.
+- Plan-order caveat resolved: minimal Bot templates were committed in Task 3 because route tests render them; Task 4 then expanded them into the intended UI.
+- **Task 4 completed**: Bots navigation, fleet cards, status chips, read-only Default Bot workspace summary, and responsive minimal styling.
+- Task 4 commit: `38cea08` — `feat: add default bot workspace UI`.
+- Task 4 focused verification: `50 passed in 1.77s`.
+- **Task 5 completed**: Phase 1 regression verification and isolated manual migration/browser checkpoint.
+- Focused runtime/provider compatibility suite: `47 passed in 1.27s`.
+- Full suite: `195 passed in 5.18s`.
+- Compile check: `rtk uv run python -m compileall -q apps/api` PASS.
+- Lockfile check: `rtk uv lock --check` PASS; 175 packages resolved.
+- `git diff --check`: PASS.
+- Manual migration used a copy of the real development DB at `/tmp/cifs-phase1-manual.sqlite3`; the original `data/chatbot.sqlite3` was not modified by the checkpoint.
+- Observed migrated state: `Default Bot` ID 1, lifecycle `active`, Live v1 ID 1 with status `published`; existing Telegram channel ID 1 attached to Bot 1.
+- The migrated System prompt, fallback reply, and compound legacy rule matched the source legacy data exactly.
+- Browser checkpoint on isolated server `127.0.0.1:8002`: `/bots`, `/bots/1`, `/channels`, `/rules`, `/assistant`, and `/test-chat` all loaded successfully.
+- Legacy Test Chat behavior verified with the actual compound rule input `สวัสดี hi`, returning `สวัสดีครับ ผมชื่อ CIFS` from source `rule`. The initial `สวัสดี`-only fallthrough was investigated and confirmed correct because the existing rule also requires extra condition `hi`; no regression was found.
+- A live Telegram network smoke was intentionally not sent from the copied DB process; provider/webhook compatibility is covered by the passing focused automated suite.
+- Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-2-external-knowledge-service.md`.
 - Keep the original `main` checkout untouched except for intentional documentation/handoff commits.
 - Preserve existing unrelated untracked tool/config files: `.agents/`, `.claude/`, `.codex/`, `.impeccable/`, `.serena/`.
 
@@ -161,15 +186,15 @@ Admin login used for local verification:
 
 - Real provider/RAG/LLM/Tailscale services remain mocked in automated verification; optional authorized deployment smoke checks are documented in the release candidate.
 - Preserve pre-existing untracked tool/config folders unless the user explicitly asks to remove them.
-- Do not assume an isolated worktree exists: the prior session stopped after dry-run only.
+- The Phase 1 worktree is currently detached HEAD under JJ_ACC ownership; attach the completed commits to an implementation branch before final integration/cleanup.
+- Port 8001 was already occupied during the manual checkpoint, so the isolated Phase 1 server used port 8002.
+- The manual checkpoint did not call the live Telegram service; no external provider side effects were generated.
 
 ## Exact Next Step
 
-In the next chat session:
+Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf86`.
 
-1. Open/read this `HANDOFF.md`.
-2. Load Superpowers `executing-plans` and `using-git-worktrees`.
-3. Create an isolated worktree from current `HEAD` using the native JJ_ACC worktree tool.
-4. Run a clean baseline test suite inside that worktree.
-5. If baseline passes, start **Task 1 of `docs/superpowers/plans/2026-09-13-phase-1-bot-foundation.md`** and continue Phase 1 inline with TDD.
-6. Update `HANDOFF.md` again at each meaningful completion checkpoint.
+1. Attach the detached Phase 1 commit chain to a feature branch.
+2. Keep the worktree for review/integration unless explicitly asked to remove it.
+3. Next implementation phase: `docs/superpowers/plans/2026-09-13-phase-2-external-knowledge-service.md`.
+4. Before Phase 2 coding, read this handoff, the design spec, and the Phase 2 plan, then follow the same isolated-worktree + TDD workflow.
