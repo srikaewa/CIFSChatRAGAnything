@@ -223,3 +223,14 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `620ff46` — `feat: add external LightRAG client`.
 - Next: Task 3 Knowledge Service registry and safe connection testing.
 
+### Task 3 — Knowledge Service registry and safe connection testing COMPLETE
+
+- RED: `rtk uv run pytest -q tests/test_knowledge_services_admin.py` -> `7 failed`, all expected 404s because the registry routes did not exist.
+- Added `/knowledge-services` list/create/update, connection test, and transient test-retrieval routes using existing admin auth + CSRF conventions.
+- API keys are encrypted at rest, masked in UI, and replace-only; a blank key edit preserves the existing credential.
+- Registry validates `http/https` service and WebUI URLs, opens the external manager with `noopener noreferrer`, persists health status/timestamp, and maps failures to stable sanitized codes without exposing raw exception bodies.
+- Test Retrieval renders the response/references without creating production `ChatEvent` history.
+- GREEN: `rtk uv run pytest -q tests/test_knowledge_services_admin.py tests/test_secret_encryption.py tests/test_failure_handling.py` -> `14 passed in 0.95s`.
+- Task commit: `6b9f607` — `feat: add knowledge service registry`.
+- Next: Task 4 bind Bot Drafts to Knowledge Services.
+
