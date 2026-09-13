@@ -58,6 +58,12 @@ def init_db() -> None:
     _migrate_sqlite_assistant_settings_escalation(active_engine)
     _migrate_sqlite_system_prompt(active_engine)
     _migrate_sqlite_rule_conditions(active_engine)
+    _migrate_sqlite_bot_links(active_engine)
+
+    from .bots.service import ensure_default_bot
+
+    with Session(active_engine) as session:
+        ensure_default_bot(session)
 
 
 def _migrate_sqlite_assistant_settings(active_engine: Engine) -> None:
@@ -153,6 +159,26 @@ def _migrate_sqlite_system_prompt(active_engine: Engine) -> None:
                 text("UPDATE assistantsettings SET system_prompt = :new WHERE system_prompt = :old"),
                 {"new": new_prompt, "old": old},
             )
+
+
+def _migrate_sqlite_bot_links(active_engine: Engine) -> None:
+    if not active_engine.url.drivername.startswith("sqlite"):
+        return
+
+    with active_engine.begin() as connection:
+        channel_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(channel)")).all()
+        }
+        if "bot_id" not in channel_columns:
+            connection.execute(text("ALTER TABLE channel ADD COLUMN bot_id INTEGER"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_channel_bot_id ON channel (bot_id)"))
+
+        event_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(chatevent)")).all()
+        }
+        if "bot_id" not in event_columns:
+            connection.execute(text("ALTER TABLE chatevent ADD COLUMN bot_id INTEGER"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_chatevent_bot_id ON chatevent (bot_id)"))
 
 
 def get_session() -> Generator[Session, None, None]:
