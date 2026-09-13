@@ -211,3 +211,15 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `543bb6d` — `feat: add encrypted knowledge service credentials`.
 - Next: Task 2 external Knowledge Service client contract.
 
+### Task 2 — External Knowledge Service client contract COMPLETE
+
+- Re-verified current upstream LightRAG contract before implementation: `/health`, `/query`, `X-API-Key`, `user_prompt`, `conversation_history`, and reference returns remain supported.
+- Security note: LightRAG 1.5.5 is the minimum approved deployment floor for the 2026 conversation-history cache/auth fixes; the legacy local lock still contains `lightrag-hku 1.5.4`, so the new external adapter does not depend on that package.
+- RED: `tests/test_knowledge_client.py` failed 9 tests because `chatbot_manager.knowledge` did not exist.
+- Added `KnowledgeQuery`, `KnowledgeAnswer`, `KnowledgeHealth`, `KnowledgeServiceClient`, `LightRAGClient`, stable `KnowledgeServiceError`, fake client, and DB client factory.
+- Client uses explicit timeouts, `follow_redirects=False`, HTTP(S)-only URLs, stable sanitized error codes, and optional `X-API-Key`.
+- GREEN: `rtk uv run pytest -q tests/test_knowledge_client.py tests/test_credentials.py` -> `11 passed in 0.36s`.
+- `git diff --check` PASS.
+- Task commit: `620ff46` — `feat: add external LightRAG client`.
+- Next: Task 3 Knowledge Service registry and safe connection testing.
+
