@@ -61,9 +61,11 @@ def init_db() -> None:
     _migrate_sqlite_bot_links(active_engine)
 
     from .bots.service import ensure_default_bot
+    from .channel_connections import migrate_legacy_channels
 
     with Session(active_engine) as session:
         ensure_default_bot(session)
+        migrate_legacy_channels(session)
 
 
 def _migrate_sqlite_assistant_settings(active_engine: Engine) -> None:
@@ -134,8 +136,7 @@ def _migrate_sqlite_rule_conditions(active_engine: Engine) -> None:
 
     with active_engine.begin() as connection:
         existing = {
-            row[1]
-            for row in connection.execute(text("PRAGMA table_info(rule)")).all()
+            row[1] for row in connection.execute(text("PRAGMA table_info(rule)")).all()
         }
         if "condition_logic" not in existing:
             connection.execute(text("ALTER TABLE rule ADD COLUMN condition_logic TEXT NOT NULL DEFAULT 'and'"))

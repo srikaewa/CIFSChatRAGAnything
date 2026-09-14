@@ -79,6 +79,22 @@ class KnowledgeService(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class ChannelConnection(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    bot_id: int = Field(index=True)
+    provider: str = Field(index=True)
+    display_name: str
+    external_account_id: str = Field(default="", index=True)
+    webhook_key: str = Field(index=True, unique=True)
+    credential_id: Optional[int] = Field(default=None, index=True)
+    enabled: bool = False
+    status: str = Field(default="not_configured", index=True)
+    last_health_check: Optional[datetime] = None
+    metadata_json: str = "{}"
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class Channel(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     provider: str = Field(index=True, unique=True)
