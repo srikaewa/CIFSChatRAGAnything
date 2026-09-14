@@ -302,3 +302,13 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `3d0c701` — `feat: add durable conversations and decision history`.
 - Next: Task 4 BotRuntime with deterministic rules + external Knowledge Service.
 
+### Task 4 — Bot-scoped runtime engine COMPLETE
+
+- RED: `tests/test_bot_runtime.py` failed at collection because `chatbot_manager.runtime.engine` did not exist.
+- Added `RuntimeRequest`, `RuntimeResult`, deterministic Bot instruction builder, Live/explicit config resolution, legacy-compatible rule matching, external Knowledge Service query path, fallback/escalation handling, and persisted `BotDecision` trace.
+- Rule actions supported: `RESPOND`, `ESCALATE`, `BLOCK`, `CONTINUE_TO_RAG`; direct actions skip external knowledge.
+- External RAG receives the user query, Bot-specific instructions, and bounded conversation history; returned references/latency are preserved without a second LLM rewrite.
+- GREEN: `rtk uv run pytest -q tests/test_bot_runtime.py tests/test_chatbot_engine.py` -> `23 passed in 0.83s`.
+- Task commit: `e8bd9c1` — `feat: add bot-scoped runtime engine`.
+- Next: Task 5 human handoff state machine and provider delivery service.
+
