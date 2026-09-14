@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+  <h1>Conversations</h1>
+  <p>Unified Inbox for Bot conversations, escalations, and operator handoff.</p>
+</section>
+
+<form class="panel inbox-filters" method="get" action="/conversations">
+  <label>Bot ID
+    <input name="bot_id" type="number" min="1" value="{{ filters.bot_id }}" placeholder="All Bots">
+  </label>
+  <label>Channel
+    <select name="channel">
+      <option value="">All channels</option>
+      {% for provider in providers %}
+      <option value="{{ provider }}" {{ "selected" if filters.channel == provider else "" }}>{{ provider|title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Status
+    <select name="status">
+      <option value="">All statuses</option>
+      <option value="bot_active" {{ "selected" if filters.status == "bot_active" else "" }}>Bot active</option>
+      <option value="needs_human" {{ "selected" if filters.status == "needs_human" else "" }}>Needs human</option>
+      <option value="human_active" {{ "selected" if filters.status == "human_active" else "" }}>Human active</option>
+      <option value="closed" {{ "selected" if filters.status == "closed" else "" }}>Closed</option>
+    </select>
+  </label>
+  <label>Assigned
+    <select name="assigned">
+      <option value="">Anyone</option>
+      <option value="me" {{ "selected" if filters.assigned == "me" else "" }}>Me</option>
+      <option value="unassigned" {{ "selected" if filters.assigned == "unassigned" else "" }}>Unassigned</option>
+    </select>
+  </label>
+  <label class="inbox-search">Search
+    <input name="q" value="{{ filters.q }}" placeholder="User ID or message text">
+  </label>
+  <button type="submit">Apply filters</button>
+  <a class="btn-ghost" href="/conversations">Clear</a>
+</form>
+
+{% if rows %}
+<div class="inbox-list" role="list">
+  {% for row in rows %}
+  <a class="panel inbox-card" href="/conversations/{{ row.conversation.id }}" role="listitem">
+    <div class="inbox-card-head">
+      <div>
+        <strong>{{ row.conversation.external_user_id }}</strong>
+        <span class="inbox-meta">{{ row.bot_name }} · {{ row.provider|title }}</span>
+      </div>
+      <span class="status-chip status-{{ row.conversation.status }}">{{ row.status_label }}</span>
+    </div>
+    <p class="inbox-excerpt">{{ row.latest_excerpt or "No messages yet" }}</p>
+    <div class="inbox-card-foot">
+      <span>Updated {{ row.wait_label }} ago</span>
+      <span>{{ row.assigned_label }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<section class="panel inbox-empty">
+  <h2>No conversations match these filters</h2>
+  <p>Adjust the filters or wait for a new inbound message.</p>
+</section>
+{% endif %}
+{% endblock %}

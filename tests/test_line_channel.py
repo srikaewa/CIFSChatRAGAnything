@@ -46,6 +46,7 @@ def test_line_parse_text_event() -> None:
     assert messages[0].text == "hello"
     assert messages[0].external_user_id == "user-1"
     assert messages[0].reply_context["reply_token"] == "reply-token"
+    assert messages[0].reply_context["user_id"] == "user-1"
 
 
 def test_line_ignores_non_text_or_unidentified_events() -> None:

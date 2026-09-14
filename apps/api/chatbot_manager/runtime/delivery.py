@@ -52,7 +52,15 @@ class DeliveryService:
     ) -> DeliveryResult:
         try:
             adapter = self._adapter(connection)
-            await adapter.send_reply(reply_context, text)
+            if (
+                connection.provider == "line"
+                and isinstance(adapter, LineAdapter)
+                and not reply_context.get("reply_token")
+                and reply_context.get("user_id")
+            ):
+                await adapter.send_push(str(reply_context["user_id"]), text)
+            else:
+                await adapter.send_reply(reply_context, text)
         except Exception as exc:
             logger.error(
                 "Provider delivery failed provider=%s connection_id=%s error_type=%s",

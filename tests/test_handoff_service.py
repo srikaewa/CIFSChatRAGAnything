@@ -161,3 +161,42 @@ async def test_delivery_failure_returns_stable_error(client) -> None:
         assert result.status == "failed"
         assert result.error_code == "provider_delivery_failed"
         assert "secret provider detail" not in result.error_code
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_line_operator_delivery_uses_push_when_user_id_is_available(client) -> None:
+    route = respx.post("https://api.line.me/v2/bot/message/push").mock(
+        return_value=Response(200, json={})
+    )
+    with Session(get_engine()) as session:
+        credential = store_credential(
+            session,
+            "channel:line",
+            {"channel_secret": "line-secret", "channel_access_token": "line-token"},
+        )
+        connection = ChannelConnection(
+            bot_id=1,
+            provider="line",
+            display_name="LINE",
+            webhook_key="delivery-line-push",
+            credential_id=credential.id,
+            enabled=True,
+            status="ready",
+        )
+        session.add(connection)
+        session.commit()
+        session.refresh(connection)
+
+        result = await DeliveryService(session).send(
+            connection,
+            {"user_id": "line-user-1"},
+            "Human follow-up",
+        )
+
+        assert result.status == "delivered"
+        assert route.called
+        request = route.calls[0].request
+        assert request.headers["authorization"] == "Bearer line-token"
+        assert b"line-user-1" in request.content
+        assert b"Human follow-up" in request.content
+
