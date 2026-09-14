@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.channel_config import CHANNEL_DEFINITIONS, channel_cards, channel_credentials, get_channel, save_channel, update_channel_credentials
+from chatbot_manager.bots.service import publish_legacy_default_bot_rules
 from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput, RESPONSE_GENERATION_FAILED_MESSAGE
 from chatbot_manager.db import get_session
 from chatbot_manager.models import AssistantSettings, ChatEvent, KnowledgeDocument, Rule, utc_now
@@ -461,7 +462,7 @@ def create_rule(
         escalate=escalate == "on",
         escalate_message=escalate_message,
     ))
-    session.commit()
+    publish_legacy_default_bot_rules(session, admin_email)
     return RedirectResponse("/rules", status_code=303)
 
 
@@ -493,7 +494,7 @@ def update_rule(
     rule.escalate_message = escalate_message
     rule.updated_at = utc_now()
     session.add(rule)
-    session.commit()
+    publish_legacy_default_bot_rules(session, admin_email)
     return RedirectResponse("/rules", status_code=303)
 
 
@@ -507,7 +508,7 @@ def delete_rule(
     if rule is None:
         raise HTTPException(status_code=404, detail="Rule not found")
     session.delete(rule)
-    session.commit()
+    publish_legacy_default_bot_rules(session, admin_email)
     return RedirectResponse("/rules", status_code=303)
 
 

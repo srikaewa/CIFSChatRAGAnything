@@ -265,7 +265,7 @@ def test_messenger_webhook_processes_text_rule_end_to_end(client: TestClient) ->
     route = respx.post("https://graph.facebook.com/v20.0/me/messages").mock(
         return_value=Response(200, json={"recipient_id": "user-1", "message_id": "m1"})
     )
-    body = b'{"entry":[{"messaging":[{"sender":{"id":"user-1"},"message":{"text":"price please"}}]}]}'
+    body = b'{"entry":[{"messaging":[{"sender":{"id":"user-1"},"message":{"mid":"mid-price-1","text":"price please"}}]}]}'
 
     response = client.post(
         "/webhooks/messenger",

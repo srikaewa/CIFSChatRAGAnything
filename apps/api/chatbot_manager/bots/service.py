@@ -107,6 +107,67 @@ def get_live_config(session: Session, bot_id: int) -> BotConfigVersion:
     return live
 
 
+def publish_legacy_default_bot_rules(session: Session, actor: str) -> BotConfigVersion:
+    """Bridge legacy /rules edits into a new immutable Default Bot live version."""
+    bot = ensure_default_bot(session)
+    if bot.id is None:
+        raise LookupError("Default Bot has no persisted id")
+
+    # Make pending legacy Rule inserts/updates/deletes visible before snapshotting them.
+    session.flush()
+    live = get_live_config(session, bot.id)
+    versions = session.exec(
+        select(BotConfigVersion).where(BotConfigVersion.bot_id == bot.id)
+    ).all()
+    next_version = max((version.version_number for version in versions), default=0) + 1
+
+    replacement = BotConfigVersion(
+        bot_id=bot.id,
+        version_number=next_version,
+        status="published",
+        system_prompt=live.system_prompt,
+        tone=live.tone,
+        language=live.language,
+        response_style=live.response_style,
+        fallback_reply=live.fallback_reply,
+        fallback_policy=live.fallback_policy,
+        escalation_policy=live.escalation_policy,
+        custom_instructions=live.custom_instructions,
+        knowledge_service_id=live.knowledge_service_id,
+        created_by=actor,
+        published_at=utc_now(),
+    )
+    session.add(replacement)
+    session.flush()
+    if replacement.id is None:
+        raise LookupError("Legacy rule bridge could not persist a config version")
+
+    legacy_rules = session.exec(select(Rule).order_by(Rule.priority)).all()
+    for legacy_rule in legacy_rules:
+        session.add(
+            BotConfigRule(
+                config_version_id=replacement.id,
+                name=legacy_rule.pattern,
+                enabled=legacy_rule.enabled,
+                priority=legacy_rule.priority,
+                match_type=legacy_rule.match_type,
+                pattern=legacy_rule.pattern,
+                condition_logic=legacy_rule.condition_logic,
+                conditions=legacy_rule.conditions,
+                action="ESCALATE" if legacy_rule.escalate else "RESPOND",
+                reply_text=legacy_rule.reply_text,
+                escalate_message=legacy_rule.escalate_message,
+            )
+        )
+
+    bot.live_config_version_id = replacement.id
+    bot.updated_at = utc_now()
+    session.add(bot)
+    session.commit()
+    session.refresh(replacement)
+    return replacement
+
+
 def ensure_draft_config(session: Session, bot_id: int, actor: str) -> BotConfigVersion:
     bot = session.get(Bot, bot_id)
     if bot is None:
