@@ -284,3 +284,12 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `d81b111` — `feat: add bot-owned channel connections`.
 - Next: Task 2 normalize provider message IDs for idempotency.
 
+### Task 2 — Normalize provider message IDs COMPLETE
+
+- RED: provider adapter suite -> `6 failed, 13 passed`; failures showed missing `external_message_id`/timestamp fields and acceptance of text events without stable IDs.
+- `IncomingMessage` now carries provider, stable external message ID, external user ID, text, timestamp milliseconds, reply context, attachment metadata, and raw event.
+- LINE uses `message.id`; Messenger uses `message.mid`; Telegram uses `update_id:message_id`. Text events without stable IDs are skipped.
+- GREEN: `rtk uv run pytest -q tests/test_line_channel.py tests/test_messenger_channel.py tests/test_telegram_channel.py` -> `19 passed in 0.06s`.
+- Task commit: `7734686` — `feat: normalize provider message identity`.
+- Next: Task 3 durable conversation/message/decision/handoff persistence.
+
