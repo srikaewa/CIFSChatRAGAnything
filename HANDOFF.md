@@ -293,3 +293,12 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `7734686` — `feat: normalize provider message identity`.
 - Next: Task 3 durable conversation/message/decision/handoff persistence.
 
+### Task 3 — Durable conversations and decision history COMPLETE
+
+- RED: `tests/test_conversation_service.py` failed at collection because the new conversation/decision models did not exist.
+- Added `Conversation`, `ConversationMessage`, `ConversationHandoffEvent`, and `BotDecision`.
+- Added `ConversationService` with 24-hour open-session reuse, closed/stale session rollover, inbound message idempotency, and bounded oldest-to-newest prompt history that excludes internal notes/system events.
+- GREEN: `rtk uv run pytest -q tests/test_conversation_service.py` -> `6 passed in 0.43s`.
+- Task commit: `3d0c701` — `feat: add durable conversations and decision history`.
+- Next: Task 4 BotRuntime with deterministic rules + external Knowledge Service.
+
