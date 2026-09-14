@@ -3,13 +3,31 @@ import json
 import respx
 from fastapi.testclient import TestClient
 from httpx import Response
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from chatbot_manager.channel_config import channel_credentials
 from chatbot_manager.channels.telegram import TELEGRAM_API
 from chatbot_manager.db import get_engine
-from chatbot_manager.models import Channel
+from chatbot_manager.models import Bot, BotConfigRule, BotConfigVersion, Channel
 from chatbot_manager.settings import get_settings
+
+
+def add_default_runtime_rule(session: Session, reply: str = "Price is 100.") -> None:
+    bot = session.exec(select(Bot).where(Bot.name == "Default Bot")).one()
+    config = session.get(BotConfigVersion, bot.live_config_version_id)
+    assert config is not None
+    session.add(
+        BotConfigRule(
+            config_version_id=config.id,
+            name="price",
+            priority=1,
+            match_type="contains",
+            pattern="price",
+            action="RESPOND",
+            reply_text=reply,
+        )
+    )
+    session.commit()
 
 
 def login(client: TestClient) -> str:
@@ -118,6 +136,7 @@ def test_telegram_webhook_processes_text_rule_and_logs(client: TestClient) -> No
             )
         )
         session.commit()
+        add_default_runtime_rule(session)
 
     response = client.post(
         "/webhooks/telegram",
