@@ -1,7 +1,7 @@
 import base64
 import hashlib
 import hmac
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -10,13 +10,13 @@ import httpx
 @dataclass(frozen=True)
 class IncomingMessage:
     provider: str
-    external_message_id: str
     external_user_id: str
     text: str
-    timestamp_ms: int | None
     reply_context: dict[str, Any]
-    attachments: list[dict[str, Any]]
     raw_event: dict[str, Any]
+    external_message_id: str = ""
+    timestamp_ms: int | None = None
+    attachments: list[dict[str, Any]] = field(default_factory=list)
 
 
 class LineAdapter:
