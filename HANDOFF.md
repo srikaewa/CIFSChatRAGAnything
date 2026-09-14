@@ -333,3 +333,32 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `591c317` — `feat: switch webhooks to bot runtime`.
 - Next: Task 7 Unified Inbox and admin human-reply workflow.
 
+### Task 7 — Unified Inbox and human reply workflow COMPLETE
+
+- Task implementation commit: `7baeea7` — `feat: add unified conversation inbox`.
+- Added global/Bot-filtered Conversation Inbox and detail views with status/channel/assignment/search filters, chronological messages, handoff events, internal notes, delivery state, and decision trace visibility.
+- Added admin actions for take, temporary Phase 3 assignment (`operator_id=0` + authenticated admin email metadata), human reply through the original `ChannelConnection`, return-to-bot, close, and internal note.
+- Human replies persist operator messages and delivery state; LINE operator replies use push delivery when the inbound one-time reply token is no longer appropriate.
+- Return-to-bot changes state only and does not replay the last user message. Internal notes are neither sent to providers nor included in Bot prompt history.
+- Added `Conversations` navigation and Bot Workspace links to the shared filtered Inbox rather than duplicating UI.
+- Task 7 implementation is committed and the Phase 3 worktree was clean before Task 8. Fresh focused/full verification is intentionally rerun in Task 8 below before any phase-complete claim.
+- Next: Task 8 Phase 3 verification and manual provider/handoff checkpoint.
+
+### Task 8 — Phase 3 verification and manual provider/handoff checkpoint COMPLETE
+
+- Task 8 first restored the missing Task 7 handoff entry, then reran verification from the Phase 3 worktree without touching `main`.
+- The first full regression run found one compatibility failure: the legacy Messenger provider-contract fixture omitted `message.mid`, which Phase 3 intentionally requires as a stable external message ID. Adding the stable ID exposed a second, real transition bug: legacy `/rules` edits still wrote only `Rule`, while Phase 3 production runtime reads immutable `BotConfigRule` snapshots.
+- Root-cause fix: legacy Rule create/update/delete now publish a new immutable Default Bot config snapshot containing the current legacy Rule set and repoint `live_config_version_id`; the previous published version remains unchanged for history. Messenger contract fixture now supplies a stable `mid`.
+- Compatibility fix commit: `0b42625` — `fix: preserve legacy rule edits in bot runtime`.
+- Targeted regression after the fix: `uv run pytest -q tests/test_phase3_provider_contracts.py::test_messenger_webhook_processes_text_rule_end_to_end tests/test_messenger_channel.py tests/test_admin_routes.py` -> `33 passed in 1.68s`.
+- Required Phase 3 focused verification: `77 passed in 2.62s`.
+- Full regression verification: `uv run pytest -q` -> `252 passed in 8.08s`.
+- Compile verification: `python3 -m compileall -q apps/api` -> exit 0. (`rtk` was not available in the JJ ACC runner PATH, so the equivalent direct Python command was used.)
+- Lockfile verification: `uv lock --check` -> exit 0, `Resolved 175 packages`.
+- `git diff --check` -> exit 0.
+- Manual isolated checkpoint used an in-memory disposable app database, a local authenticated LightRAG-compatible HTTP service, a Messenger `ChannelConnection`, valid Messenger HMAC signatures, and a simulated successful provider-delivery boundary. No production DB or external provider was modified.
+- Manual checkpoint PASS: normal question resolved to the correct Bot and local external-RAG-compatible service; grounded reply delivered; duplicate provider message caused no duplicate RAG call/reply; explicit escalation moved the conversation to `needs_human`; Take moved it to `human_active`; inbound during `human_active` was persisted with zero Bot/RAG delivery; Inbox operator reply used the original `ChannelConnection`; Return to Bot generated no replay; the next inbound resumed Bot processing and the RAG conversation history contained the operator response. Smoke summary: `rag_queries=2`, `deliveries=4`, `conversation_id=1`.
+- Real-network limitation: this workspace still has no authorized real provider + external RAG deployment configuration recorded, so no live provider message was sent and no real external endpoint success is claimed. When authorized deployment details are available, repeat the same provider/RAG smoke without printing secrets.
+- **Phase 3 is complete for implementation and local verification.**
+- Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-4-draft-test-publish.md`.
+- Keep `/home/srikaewa/Data-II/Projects/ChatBot/CIFSChatbotManager-phase3-worktree` on `feat/phase-3-runtime-conversations` for review/integration; do not modify `main` during Phase 3 closeout.
