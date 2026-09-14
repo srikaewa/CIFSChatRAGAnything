@@ -312,3 +312,13 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `e8bd9c1` — `feat: add bot-scoped runtime engine`.
 - Next: Task 5 human handoff state machine and provider delivery service.
 
+### Task 5 — Human handoff and provider delivery COMPLETE
+
+- RED: `tests/test_handoff_service.py` failed at collection because the handoff/delivery services did not exist.
+- Added `HandoffService` with `escalate`, atomic conditional `take`, `assign`, `return_to_bot`, and `close`, plus durable handoff events and stable state errors.
+- Added `DeliveryService` that reconstructs LINE/Messenger/Telegram adapters from encrypted `ChannelConnection` credentials and maps provider failures to `provider_delivery_failed` without leaking response bodies.
+- Regression follow-up: the new `IncomingMessage` identity fields received safe defaults for legacy/manual construction while provider parsers still require and populate stable IDs.
+- GREEN: handoff + failure-handling + provider adapter verification -> `29 passed in 0.61s`.
+- Task commit: `f85692e` — `feat: add human handoff and delivery services`.
+- Next: Task 6 switch provider webhooks to BotRuntime with idempotency and compatibility aliases.
+
