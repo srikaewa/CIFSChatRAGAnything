@@ -95,6 +95,56 @@ class ChannelConnection(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class Conversation(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    bot_id: int = Field(index=True)
+    channel_connection_id: int = Field(index=True)
+    external_user_id: str = Field(index=True)
+    status: str = Field(default="bot_active", index=True)
+    assigned_operator_id: Optional[int] = Field(default=None, index=True)
+    handoff_reason: str = ""
+    started_at: datetime = Field(default_factory=utc_now)
+    last_message_at: datetime = Field(default_factory=utc_now, index=True)
+    closed_at: Optional[datetime] = None
+
+
+class ConversationMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    conversation_id: int = Field(index=True)
+    sender_type: str = Field(index=True)
+    content: str
+    external_message_id: str = Field(default="", index=True)
+    delivery_status: str = ""
+    metadata_json: str = "{}"
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class ConversationHandoffEvent(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    conversation_id: int = Field(index=True)
+    event_type: str = Field(index=True)
+    actor_user_id: Optional[int] = Field(default=None, index=True)
+    reason: str = ""
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class BotDecision(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    message_id: int = Field(index=True)
+    bot_id: int = Field(index=True)
+    config_version_id: int = Field(index=True)
+    decision_type: str = Field(index=True)
+    rule_id: Optional[int] = Field(default=None, index=True)
+    knowledge_service_id: Optional[int] = Field(default=None, index=True)
+    reference_count: int = 0
+    retrieval_latency_ms: Optional[int] = None
+    llm_latency_ms: Optional[int] = None
+    total_latency_ms: int = 0
+    error_code: str = Field(default="", index=True)
+    metadata_json: str = "{}"
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+
+
 class Channel(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     provider: str = Field(index=True, unique=True)
