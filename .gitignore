@@ -12,3 +12,4 @@ data/rag/
 .tokensave/
 .env
 codex-session-*/
+.worktrees/
