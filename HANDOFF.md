@@ -322,3 +322,14 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Task commit: `f85692e` — `feat: add human handoff and delivery services`.
 - Next: Task 6 switch provider webhooks to BotRuntime with idempotency and compatibility aliases.
 
+### Task 6 — Production webhooks switched to BotRuntime COMPLETE
+
+- RED: Phase 3 webhook integration tests initially failed on missing keyed endpoints, duplicate handling, human-active short-circuiting, escalation state, and ambiguous legacy aliases.
+- Added keyed `/{provider}/{webhook_key}` webhook routing plus fixed-path legacy aliases, lazy idempotent migration for legacy Channel rows, credential-derived readiness checks, preserved provider authenticity validation, and stable ambiguous-alias failure.
+- Production message orchestration is now `ChannelConnection -> Conversation -> BotRuntime -> Handoff/Delivery`; duplicate provider message IDs do not re-run runtime or re-send replies; `human_active` persists inbound messages but performs zero Bot generation.
+- Compatibility `ChatEvent` rows remain for the legacy Logs page, while Conversations/Messages/Decisions are the authoritative runtime state. Legacy `process_messages()` remains only as a compatibility helper and is no longer called by production webhook routes.
+- Updated webhook fixtures to seed Bot-scoped published rules and stable provider message IDs.
+- GREEN: `rtk uv run pytest -q tests/test_webhooks.py tests/test_telegram_webhooks.py tests/test_webhook_security.py tests/test_failure_handling.py` -> `29 passed in 1.41s`.
+- Task commit: `591c317` — `feat: switch webhooks to bot runtime`.
+- Next: Task 7 Unified Inbox and admin human-reply workflow.
+
