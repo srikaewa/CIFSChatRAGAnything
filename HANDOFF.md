@@ -270,3 +270,17 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Remaining deployment checkpoint: when an authorized real LightRAG/RAG-Anything endpoint is available, record its exact version, verify its `/health` + `/query` paths/auth without printing the key, then repeat Test Connection/Test Retrieval against that endpoint.
 - Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-3-runtime-conversations.md`.
 
+## Phase 3 Execution Progress — 2026-09-14
+
+- Worktree: `/home/srikaewa/Data-II/Projects/ChatBot/CIFSChatbotManager-phase3-worktree` on `feat/phase-3-runtime-conversations`, branched from completed Phase 2 head `70c1738`.
+- Baseline before Phase 3 changes: `217 passed in 7.48s`.
+
+### Task 1 — Bot-owned ChannelConnection migration COMPLETE
+
+- RED: `rtk uv run pytest -q tests/test_channel_connections.py` failed at collection because `chatbot_manager.channel_connections` did not exist.
+- Added `ChannelConnection`, encrypted credential migration helpers, idempotent legacy-channel migration, legacy Default Bot lookup, and startup migration after Default Bot bootstrap.
+- Multiple provider accounts are now representable because `ChannelConnection.provider` is not globally unique; webhook keys are unique random values.
+- GREEN: `rtk uv run pytest -q tests/test_channel_connections.py tests/test_secret_encryption.py` -> `7 passed in 0.53s`.
+- Task commit: `d81b111` — `feat: add bot-owned channel connections`.
+- Next: Task 2 normalize provider message IDs for idempotency.
+
