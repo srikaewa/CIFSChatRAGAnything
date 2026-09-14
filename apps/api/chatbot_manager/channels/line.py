@@ -10,9 +10,12 @@ import httpx
 @dataclass(frozen=True)
 class IncomingMessage:
     provider: str
+    external_message_id: str
     external_user_id: str
     text: str
+    timestamp_ms: int | None
     reply_context: dict[str, Any]
+    attachments: list[dict[str, Any]]
     raw_event: dict[str, Any]
 
 
@@ -37,14 +40,19 @@ class LineAdapter:
             if event.get("type") != "message" or message.get("type") != "text":
                 continue
             text = message.get("text", "")
-            if not text:
+            external_message_id = message.get("id", "")
+            if not text or not external_message_id:
                 continue
+            timestamp = event.get("timestamp")
             messages.append(
                 IncomingMessage(
                     provider="line",
+                    external_message_id=str(external_message_id),
                     external_user_id=event.get("source", {}).get("userId", ""),
                     text=text,
+                    timestamp_ms=timestamp if isinstance(timestamp, int) else None,
                     reply_context={"reply_token": event.get("replyToken", "")},
+                    attachments=[],
                     raw_event=event,
                 )
             )

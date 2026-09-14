@@ -28,9 +28,10 @@ def test_line_parse_text_event() -> None:
         "events": [
             {
                 "type": "message",
+                "timestamp": 1700000000000,
                 "replyToken": "reply-token",
                 "source": {"userId": "user-1"},
-                "message": {"type": "text", "text": "hello"},
+                "message": {"id": "m1", "type": "text", "text": "hello"},
             }
         ]
     }
@@ -39,17 +40,25 @@ def test_line_parse_text_event() -> None:
 
     assert len(messages) == 1
     assert messages[0].provider == "line"
+    assert messages[0].external_message_id == "m1"
+    assert messages[0].timestamp_ms == 1700000000000
+    assert messages[0].attachments == []
     assert messages[0].text == "hello"
     assert messages[0].external_user_id == "user-1"
     assert messages[0].reply_context["reply_token"] == "reply-token"
 
 
-def test_line_ignores_non_text_events() -> None:
+def test_line_ignores_non_text_or_unidentified_events() -> None:
     adapter = LineAdapter(channel_secret="secret", channel_access_token="token")
     payload = {
         "events": [
             {"type": "follow", "source": {"userId": "user-1"}},
-            {"type": "message", "message": {"type": "image"}, "source": {"userId": "user-2"}},
+            {"type": "message", "message": {"id": "img1", "type": "image"}, "source": {"userId": "user-2"}},
+            {
+                "type": "message",
+                "source": {"userId": "user-3"},
+                "message": {"type": "text", "text": "missing stable id"},
+            },
         ]
     }
 

@@ -29,14 +29,21 @@ class TelegramAdapter:
         text = msg.get("text", "")
         chat_id = msg.get("chat", {}).get("id", "")
         from_id = msg.get("from", {}).get("id", "")
-        if not text or not chat_id:
+        update_id = update.get("update_id")
+        message_id = msg.get("message_id")
+        if not text or not chat_id or update_id is None or message_id is None:
             return messages
+        timestamp = msg.get("date")
+        timestamp_ms = timestamp * 1000 if isinstance(timestamp, int) else None
         messages.append(
             IncomingMessage(
                 provider="telegram",
+                external_message_id=f"{update_id}:{message_id}",
                 external_user_id=str(from_id),
                 text=text,
+                timestamp_ms=timestamp_ms,
                 reply_context={"chat_id": chat_id},
+                attachments=[],
                 raw_event=update,
             )
         )

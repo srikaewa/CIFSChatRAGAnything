@@ -33,16 +33,22 @@ class MessengerAdapter:
         messages: list[IncomingMessage] = []
         for entry in payload.get("entry", []):
             for event in entry.get("messaging", []):
-                text = event.get("message", {}).get("text")
+                message = event.get("message", {})
+                text = message.get("text")
+                external_message_id = message.get("mid", "")
                 sender_id = event.get("sender", {}).get("id", "")
-                if not text or not sender_id:
+                if not text or not sender_id or not external_message_id:
                     continue
+                timestamp = event.get("timestamp")
                 messages.append(
                     IncomingMessage(
                         provider="messenger",
+                        external_message_id=str(external_message_id),
                         external_user_id=sender_id,
                         text=text,
+                        timestamp_ms=timestamp if isinstance(timestamp, int) else None,
                         reply_context={"recipient_id": sender_id},
+                        attachments=[],
                         raw_event=event,
                     )
                 )

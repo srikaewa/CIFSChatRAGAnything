@@ -24,6 +24,7 @@ def test_parse_text_event() -> None:
         "update_id": 1,
         "message": {
             "message_id": 10,
+            "date": 1700000000,
             "from": {"id": 123, "is_bot": False, "first_name": "User"},
             "chat": {"id": 456, "type": "private"},
             "text": "hello",
@@ -34,17 +35,30 @@ def test_parse_text_event() -> None:
 
     assert len(messages) == 1
     assert messages[0].provider == "telegram"
+    assert messages[0].external_message_id == "1:10"
+    assert messages[0].timestamp_ms == 1700000000000
+    assert messages[0].attachments == []
     assert messages[0].text == "hello"
     assert messages[0].external_user_id == "123"
     assert messages[0].reply_context["chat_id"] == 456
 
 
-def test_parse_ignores_non_message_updates() -> None:
+def test_parse_ignores_non_message_or_unidentified_updates() -> None:
     adapter = TelegramAdapter(bot_token="token")
     payload = {"update_id": 1}
     assert adapter.parse_events(payload) == []
 
     payload = {"update_id": 2, "callback_query": {"id": "cq1"}}
+    assert adapter.parse_events(payload) == []
+
+    payload = {
+        "update_id": 3,
+        "message": {
+            "from": {"id": 123},
+            "chat": {"id": 456},
+            "text": "missing message id",
+        },
+    }
     assert adapter.parse_events(payload) == []
 
 
