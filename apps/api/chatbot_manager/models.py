@@ -145,6 +145,48 @@ class BotDecision(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now, index=True)
 
 
+class BotTestCase(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    bot_id: int = Field(index=True)
+    name: str = ""
+    input_message: str
+    expected_behavior_json: str = "{}"
+    tags_json: str = "[]"
+    enabled: bool = Field(default=True, index=True)
+    created_by: str = ""
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class BotTestRun(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    bot_id: int = Field(index=True)
+    config_version_id: int = Field(index=True)
+    status: str = Field(default="running", index=True)
+    actor: str = ""
+    started_at: datetime = Field(default_factory=utc_now, index=True)
+    completed_at: Optional[datetime] = None
+
+
+class BotTestResult(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    test_run_id: int = Field(index=True)
+    test_case_id: int = Field(index=True)
+    config_version_id: int = Field(index=True)
+    input_message: str
+    expected_behavior_json: str = "{}"
+    tags_json: str = "[]"
+    actual_response: str = ""
+    decision_type: str = Field(default="", index=True)
+    outcome: str = Field(default="fail", index=True)
+    total_latency_ms: int = 0
+    reference_count: int = 0
+    escalate: bool = False
+    error_code: str = ""
+    evaluation_details_json: str = "[]"
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+
+
 class Channel(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     provider: str = Field(index=True, unique=True)

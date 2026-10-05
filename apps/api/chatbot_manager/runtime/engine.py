@@ -106,21 +106,22 @@ class BotRuntime:
     ) -> RuntimeResult:
         refs = references or []
         total_latency_ms = int((perf_counter() - started) * 1000)
-        decision = BotDecision(
-            message_id=request.message_id,
-            bot_id=request.bot_id,
-            config_version_id=config.id,
-            decision_type=decision_type,
-            rule_id=rule_id,
-            knowledge_service_id=config.knowledge_service_id,
-            reference_count=len(refs),
-            retrieval_latency_ms=retrieval_latency_ms,
-            total_latency_ms=total_latency_ms,
-            error_code=error_code,
-            metadata_json="{}",
-        )
-        self._session.add(decision)
-        self._session.commit()
+        if not request.test_mode:
+            decision = BotDecision(
+                message_id=request.message_id,
+                bot_id=request.bot_id,
+                config_version_id=config.id,
+                decision_type=decision_type,
+                rule_id=rule_id,
+                knowledge_service_id=config.knowledge_service_id,
+                reference_count=len(refs),
+                retrieval_latency_ms=retrieval_latency_ms,
+                total_latency_ms=total_latency_ms,
+                error_code=error_code,
+                metadata_json="{}",
+            )
+            self._session.add(decision)
+            self._session.commit()
         return RuntimeResult(
             decision_type=decision_type,
             reply_text=reply_text,
