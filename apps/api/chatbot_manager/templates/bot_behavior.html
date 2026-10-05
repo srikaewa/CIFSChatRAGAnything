@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "_bot_workspace_header.html" %}
+
+{% if saved %}
+<p class="alert alert-success" role="status">Draft behavior saved. Live behavior is unchanged.</p>
+{% endif %}
+
+<section class="panel">
+  <h2>Draft Behavior</h2>
+  <p>Changes on this page apply only to the Draft configuration.</p>
+  <form class="form-grid" method="post" action="/bots/{{ bot.id }}/behavior">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+    <label class="wide">System prompt
+      <textarea name="system_prompt" rows="7">{{ editable.system_prompt if editable else "" }}</textarea>
+    </label>
+    <label>Tone
+      <input type="text" name="tone" value="{{ editable.tone if editable else 'professional' }}">
+    </label>
+    <label>Language
+      <input type="text" name="language" value="{{ editable.language if editable else 'auto' }}">
+    </label>
+    <label>Response style
+      <input type="text" name="response_style" value="{{ editable.response_style if editable else 'concise' }}">
+    </label>
+    <label>Fallback policy
+      <select name="fallback_policy">
+        <option value="reply" {{ "selected" if not editable or editable.fallback_policy == "reply" else "" }}>Reply</option>
+        <option value="escalate" {{ "selected" if editable and editable.fallback_policy == "escalate" else "" }}>Escalate</option>
+      </select>
+    </label>
+    <label class="wide">Fallback reply
+      <textarea name="fallback_reply" rows="3">{{ editable.fallback_reply if editable else "" }}</textarea>
+    </label>
+    <label class="wide">Escalation policy
+      <textarea name="escalation_policy" rows="3">{{ editable.escalation_policy if editable else "{}" }}</textarea>
+    </label>
+    <label class="wide">Custom instructions
+      <textarea name="custom_instructions" rows="5">{{ editable.custom_instructions if editable else "" }}</textarea>
+    </label>
+    <button type="submit">Save Behavior Draft</button>
+    <a class="btn-ghost" href="/bots/{{ bot.id }}/rules">Edit deterministic rules</a>
+  </form>
+</section>
+{% endblock %}

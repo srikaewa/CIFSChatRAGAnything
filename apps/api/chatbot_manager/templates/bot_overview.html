@@ -1,15 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="bot-workspace-header">
-  <div>
-    <p class="eyebrow">Phase 1 migration view</p>
-    <h1>{{ bot.name }}</h1>
-    <p>{{ bot.description }}</p>
-  </div>
-  <span class="status-chip">{{ bot.lifecycle_status|title }}</span>
-</section>
+{% include "_bot_workspace_header.html" %}
 
-<p><a class="action-btn" href="/conversations?bot_id={{ bot.id }}">View conversations for this Bot</a></p>
+{% if error %}
+<p class="alert alert-error" role="alert">{{ error|replace('_', ' ')|title }}</p>
+{% endif %}
 
 <section class="grid" aria-label="Bot configuration summary">
   <article class="panel">
@@ -19,21 +14,69 @@
     {% else %}
     <p>No live configuration.</p>
     {% endif %}
+    {% if draft %}
+    <p><strong>Draft v{{ draft.version_number }}</strong> · unpublished</p>
+    {% endif %}
   </article>
 
   <article class="panel">
     <h2>System prompt</h2>
-    <p>{{ live.system_prompt if live else "Not configured" }}</p>
+    <p>{{ editable.system_prompt if editable and editable.system_prompt else "Not configured" }}</p>
   </article>
 
   <article class="panel">
     <h2>Fallback reply</h2>
-    <p>{{ live.fallback_reply if live else "Not configured" }}</p>
+    <p>{{ editable.fallback_reply if editable and editable.fallback_reply else "Not configured" }}</p>
   </article>
 </section>
 
 <section class="panel bot-workspace-note">
-  <h2>Read-only foundation</h2>
-  <p>Phase 1 exposes migrated production configuration for verification only. Draft editing and publish controls arrive in a later phase.</p>
+  <h2>Readiness</h2>
+  {% if readiness %}
+  <ul class="readiness-list">
+    {% for check in readiness.checks %}
+    <li><span class="status-chip">{{ check.status|title }}</span> {{ check.message }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No configuration is available for readiness checks.</p>
+  {% endif %}
+  <div class="panel-actions">
+    <a class="action-btn" href="/bots/{{ bot.id }}/setup">Setup Wizard</a>
+    <a class="action-btn" href="/bots/{{ bot.id }}/behavior">Edit Behavior</a>
+    <a class="action-btn" href="/bots/{{ bot.id }}/rules">Edit Rules</a>
+  </div>
+</section>
+
+<section class="panel bot-workspace-note">
+  <h2>Lifecycle</h2>
+  <div class="panel-actions">
+    {% if bot.lifecycle_status == "draft" %}
+    <form class="inline-form" method="post" action="/bots/{{ bot.id }}/ready">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <button class="action-btn" type="submit">Mark Ready</button>
+    </form>
+    {% elif bot.lifecycle_status == "ready" %}
+    <form class="inline-form" method="post" action="/bots/{{ bot.id }}/activate">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <button class="action-btn" type="submit">Activate</button>
+    </form>
+    {% elif bot.lifecycle_status == "active" %}
+    <form class="inline-form" method="post" action="/bots/{{ bot.id }}/pause">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <button class="action-btn" type="submit">Pause Bot</button>
+    </form>
+    {% elif bot.lifecycle_status == "paused" %}
+    <form class="inline-form" method="post" action="/bots/{{ bot.id }}/resume">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <button class="action-btn" type="submit">Resume Bot</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+
+<section class="panel bot-workspace-note">
+  <h2>Migrated production baseline</h2>
+  <p>Phase 1 migration view remains visible for the original Bot while all new edits are Draft-scoped.</p>
 </section>
 {% endblock %}

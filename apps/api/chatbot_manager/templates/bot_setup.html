@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Setup Wizard · {{ bot.name }}</p>
+  <h1>Setup Wizard</h1>
+  <p>Complete the Bot configuration in order, then test readiness before activation.</p>
+</section>
+
+{% if error == "readiness_failed" %}
+<p class="alert alert-error" role="alert">Resolve failing readiness checks before marking this Bot ready.</p>
+{% endif %}
+
+<ol class="setup-steps">
+  {% for label, href in setup_steps %}
+  <li><a href="{{ href }}">{{ label }}</a></li>
+  {% endfor %}
+</ol>
+
+<section class="panel bot-workspace-note">
+  <h2>Readiness checks</h2>
+  {% if readiness %}
+  <ul class="readiness-list">
+    {% for check in readiness.checks %}
+    <li><span class="status-chip">{{ check.status|title }}</span> {{ check.message }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No configuration is available yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -2,7 +2,21 @@
 {% block content %}
 <section class="page-head">
   <h1>Bots</h1>
-  <p>Manage chatbot workspaces. Phase 1 shows the migrated production Bot without changing live behavior.</p>
+  <p>Manage chatbot workspaces, Draft configuration, readiness, and operational lifecycle.</p>
+</section>
+
+<section class="panel bot-create-panel">
+  <h2>Create Bot</h2>
+  <form class="form-grid" method="post" action="/bots">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+    <label>Name
+      <input type="text" name="name" required>
+    </label>
+    <label>Description
+      <input type="text" name="description">
+    </label>
+    <button type="submit">Create Bot</button>
+  </form>
 </section>
 
 <section aria-label="Bot fleet">
@@ -15,7 +29,7 @@
       </div>
       <p>{{ bot.description or "Chatbot workspace" }}</p>
     </div>
-    <a class="action-btn" href="/bots/{{ bot.id }}">Open Workspace</a>
+    <a class="action-btn" href="/bots/{{ bot.id }}">{{ "Continue Setup" if bot.lifecycle_status in ("draft", "ready") else "Open Workspace" }}</a>
   </article>
   {% else %}
   <article class="panel">

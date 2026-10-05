@@ -1,0 +1,23 @@
+<section class="bot-workspace-header">
+  <div>
+    <p class="eyebrow">Bot Workspace</p>
+    <h1>{{ bot.name }}</h1>
+    <p>{{ bot.description or "Chatbot workspace" }}</p>
+    <div class="bot-workspace-signals" aria-label="Bot workspace status">
+      <span class="status-chip">{{ bot.lifecycle_status|title }}</span>
+      <span class="status-chip">Live {{ "v" ~ live.version_number if live else "—" }}</span>
+      <span class="status-chip">Draft {{ "v" ~ draft.version_number if draft else "—" }}</span>
+      <span class="status-chip">Knowledge {{ workspace_knowledge_service.health_status|replace('_', ' ')|title if workspace_knowledge_service else "Not configured" }}</span>
+      <span class="status-chip">Channels {{ workspace_channel_check.status|title if workspace_channel_check else "Unknown" }}</span>
+    </div>
+  </div>
+</section>
+<nav class="bot-workspace-nav" aria-label="Bot workspace navigation">
+  <a href="/bots/{{ bot.id }}" class="{{ 'active' if active_workspace_tab == 'overview' else '' }}">Overview</a>
+  <a href="/bots/{{ bot.id }}/behavior" class="{{ 'active' if active_workspace_tab == 'behavior' else '' }}">Behavior</a>
+  <a href="/bots/{{ bot.id }}/knowledge" class="{{ 'active' if active_workspace_tab == 'knowledge' else '' }}">Knowledge</a>
+  <a href="/channels">Channels</a>
+  <a href="/bots/{{ bot.id }}/test" class="{{ 'active' if active_workspace_tab == 'test' else '' }}">Test</a>
+  <a href="/conversations?bot_id={{ bot.id }}">Conversations</a>
+  <a href="/bots/{{ bot.id }}/versions" class="{{ 'active' if active_workspace_tab == 'versions' else '' }}">Versions</a>
+</nav>

@@ -839,6 +839,69 @@ textarea {
   margin-top: 16px;
 }
 
+.bot-workspace-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.bot-workspace-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -8px 0 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bot-workspace-nav a {
+  padding: 7px 10px;
+  border-radius: 7px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.bot-workspace-nav a:hover,
+.bot-workspace-nav a.active {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.bot-create-panel {
+  margin-bottom: 20px;
+}
+
+.setup-steps,
+.readiness-list {
+  display: grid;
+  gap: 10px;
+}
+
+.setup-steps {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  padding: 0;
+  list-style-position: inside;
+}
+
+.setup-steps li {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel);
+}
+
+.setup-steps a {
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.readiness-list {
+  padding-left: 0;
+  list-style: none;
+}
+
 @media (max-width: 680px) {
   .bot-card,
   .bot-workspace-header {

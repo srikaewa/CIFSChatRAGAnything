@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "_bot_workspace_header.html" %}
+
+{% if saved %}
+<p class="alert alert-success" role="status">Draft rule saved. Live rules are unchanged.</p>
+{% endif %}
+
+<section class="panel">
+  <h2>Draft Rules</h2>
+  {% if rules %}
+  <table class="data-table">
+    <thead><tr><th>Priority</th><th>Name</th><th>Match</th><th>Action</th></tr></thead>
+    <tbody>
+      {% for rule in rules %}
+      <tr>
+        <td>{{ rule.priority }}</td>
+        <td>{{ rule.name or rule.pattern }}</td>
+        <td>{{ rule.match_type }} · {{ rule.pattern }}</td>
+        <td>{{ rule.action }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No rules are configured yet.</p>
+  {% endif %}
+</section>
+
+<section class="panel bot-workspace-note">
+  <h2>Add Draft Rule</h2>
+  <form class="form-grid" method="post" action="/bots/{{ bot.id }}/rules">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+    <label>Name
+      <input type="text" name="name">
+    </label>
+    <label>Priority
+      <input type="number" name="priority" value="100">
+    </label>
+    <label>Match type
+      <select name="match_type">
+        <option value="contains">contains</option>
+        <option value="exact">exact</option>
+        <option value="regex">regex</option>
+      </select>
+    </label>
+    <label>Enabled
+      <select name="enabled">
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    </label>
+    <label class="wide">Pattern
+      <input type="text" name="pattern" required>
+    </label>
+    <label>Action
+      <select name="action">
+        <option value="RESPOND">Respond</option>
+        <option value="CONTINUE_TO_RAG">Continue to RAG</option>
+        <option value="ESCALATE">Escalate</option>
+      </select>
+    </label>
+    <label class="wide">Reply text
+      <textarea name="reply_text" rows="3"></textarea>
+    </label>
+    <label class="wide">Escalation message
+      <textarea name="escalate_message" rows="3"></textarea>
+    </label>
+    <button type="submit">Add Rule to Draft</button>
+  </form>
+</section>
+{% endblock %}

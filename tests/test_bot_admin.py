@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from chatbot_manager.db import get_engine
-from chatbot_manager.models import Bot, BotConfigVersion, KnowledgeService
+from chatbot_manager.models import Bot, BotConfigRule, BotConfigVersion, KnowledgeService
 
 
 def login(client: TestClient) -> None:
@@ -173,3 +173,297 @@ def test_bot_knowledge_rejects_disabled_service(client: TestClient) -> None:
         bot = session.get(Bot, bot_id)
         assert bot is not None
         assert bot.draft_config_version_id is None
+
+
+def test_create_bot_starts_draft_setup(client: TestClient) -> None:
+    login(client)
+    page = client.get("/bots")
+    csrf = csrf_from_page(page.text)
+
+    response = client.post(
+        "/bots",
+        data={
+            "csrf_token": csrf,
+            "name": "Admissions Bot",
+            "description": "Admissions support",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    with Session(get_engine()) as session:
+        bot = session.exec(select(Bot).where(Bot.name == "Admissions Bot")).one()
+        assert bot.lifecycle_status == "draft"
+        assert bot.live_config_version_id is None
+        assert bot.draft_config_version_id is not None
+        draft = session.get(BotConfigVersion, bot.draft_config_version_id)
+        assert draft is not None
+        assert draft.status == "draft"
+        assert draft.version_number == 1
+        assert response.headers["location"] == f"/bots/{bot.id}/setup"
+
+
+def test_behavior_save_changes_draft_not_live(client: TestClient) -> None:
+    login(client)
+    with Session(get_engine()) as session:
+        bot = session.exec(select(Bot).where(Bot.name == "Default Bot")).one()
+        assert bot.id is not None
+        bot_id = bot.id
+        live_id = bot.live_config_version_id
+        live = session.get(BotConfigVersion, live_id)
+        assert live is not None
+        original_prompt = live.system_prompt
+
+    page = client.get(f"/bots/{bot_id}/behavior")
+    assert page.status_code == 200
+    csrf = csrf_from_page(page.text)
+    response = client.post(
+        f"/bots/{bot_id}/behavior",
+        data={
+            "csrf_token": csrf,
+            "system_prompt": "Draft-only behavior",
+            "tone": "friendly",
+            "language": "Thai",
+            "response_style": "concise",
+            "fallback_reply": "Please contact staff.",
+            "fallback_policy": "reply",
+            "custom_instructions": "Use official CIFS information.",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with Session(get_engine()) as session:
+        bot = session.get(Bot, bot_id)
+        assert bot is not None
+        assert bot.live_config_version_id == live_id
+        assert bot.draft_config_version_id is not None
+        live = session.get(BotConfigVersion, live_id)
+        draft = session.get(BotConfigVersion, bot.draft_config_version_id)
+        assert live is not None and draft is not None
+        assert live.system_prompt == original_prompt
+        assert draft.system_prompt == "Draft-only behavior"
+        assert draft.tone == "friendly"
+
+
+def test_rule_create_is_scoped_to_draft_version(client: TestClient) -> None:
+    login(client)
+    with Session(get_engine()) as session:
+        bot = session.exec(select(Bot).where(Bot.name == "Default Bot")).one()
+        assert bot.id is not None
+        bot_id = bot.id
+        live_id = bot.live_config_version_id
+
+    page = client.get(f"/bots/{bot_id}/rules")
+    assert page.status_code == 200
+    csrf = csrf_from_page(page.text)
+    response = client.post(
+        f"/bots/{bot_id}/rules",
+        data={
+            "csrf_token": csrf,
+            "name": "admissions",
+            "priority": "5",
+            "match_type": "contains",
+            "pattern": "admissions",
+            "action": "RESPOND",
+            "reply_text": "Admissions information",
+            "escalate_message": "",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with Session(get_engine()) as session:
+        bot = session.get(Bot, bot_id)
+        assert bot is not None
+        assert bot.draft_config_version_id is not None
+        rules = session.exec(
+            select(BotConfigRule).where(BotConfigRule.pattern == "admissions")
+        ).all()
+        assert len(rules) == 1
+        assert rules[0].config_version_id == bot.draft_config_version_id
+        assert rules[0].config_version_id != live_id
+
+
+def test_setup_wizard_shows_profile_knowledge_behavior_channels_test_steps(client: TestClient) -> None:
+    login(client)
+    page = client.get("/bots/1/setup")
+    assert page.status_code == 200
+    labels = ["Profile", "Knowledge", "Behavior", "Channels", "Test"]
+    positions = [page.text.index(f">{label}<") for label in labels]
+    assert positions == sorted(positions)
+    for href in (
+        "/bots/1",
+        "/bots/1/knowledge",
+        "/bots/1/behavior",
+        "/channels",
+        "/bots/1/test",
+    ):
+        assert f'href="{href}"' in page.text
+
+
+def test_pause_active_bot_does_not_modify_config_version(client: TestClient) -> None:
+    login(client)
+    with Session(get_engine()) as session:
+        bot = session.exec(select(Bot).where(Bot.name == "Default Bot")).one()
+        assert bot.id is not None
+        bot_id = bot.id
+        live_id = bot.live_config_version_id
+        draft_id = bot.draft_config_version_id
+
+    csrf = csrf_from_page(client.get(f"/bots/{bot_id}").text)
+    response = client.post(
+        f"/bots/{bot_id}/pause",
+        data={"csrf_token": csrf},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with Session(get_engine()) as session:
+        bot = session.get(Bot, bot_id)
+        assert bot is not None
+        assert bot.lifecycle_status == "paused"
+        assert bot.live_config_version_id == live_id
+        assert bot.draft_config_version_id == draft_id
+
+
+def test_ready_transition_uses_draft_readiness_without_publishing(client: TestClient) -> None:
+    login(client)
+    csrf = csrf_from_page(client.get("/bots").text)
+    client.post(
+        "/bots",
+        data={"csrf_token": csrf, "name": "Ready Bot", "description": "Ready transition"},
+        follow_redirects=False,
+    )
+    with Session(get_engine()) as session:
+        bot = session.exec(select(Bot).where(Bot.name == "Ready Bot")).one()
+        assert bot.id is not None
+        bot_id = bot.id
+        draft_id = bot.draft_config_version_id
+
+    behavior = client.get(f"/bots/{bot_id}/behavior")
+    csrf = csrf_from_page(behavior.text)
+    client.post(
+        f"/bots/{bot_id}/behavior",
+        data={
+            "csrf_token": csrf,
+            "system_prompt": "Help users with CIFS information.",
+            "tone": "professional",
+            "language": "auto",
+            "response_style": "concise",
+            "fallback_reply": "Please contact staff.",
+            "fallback_policy": "reply",
+            "custom_instructions": "Use approved information only.",
+        },
+        follow_redirects=False,
+    )
+
+    csrf = csrf_from_page(client.get(f"/bots/{bot_id}").text)
+    response = client.post(
+        f"/bots/{bot_id}/ready",
+        data={"csrf_token": csrf},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with Session(get_engine()) as session:
+        bot = session.get(Bot, bot_id)
+        assert bot is not None
+        assert bot.lifecycle_status == "ready"
+        assert bot.live_config_version_id is None
+        assert bot.draft_config_version_id == draft_id
+
+
+def test_activate_ready_bot_requires_existing_live_config(client: TestClient) -> None:
+    login(client)
+    with Session(get_engine()) as session:
+        bot = session.exec(select(Bot).where(Bot.name == "Default Bot")).one()
+        assert bot.id is not None
+        bot.lifecycle_status = "ready"
+        session.add(bot)
+        session.commit()
+        bot_id = bot.id
+        live_id = bot.live_config_version_id
+        draft_id = bot.draft_config_version_id
+
+    csrf = csrf_from_page(client.get(f"/bots/{bot_id}").text)
+    response = client.post(
+        f"/bots/{bot_id}/activate",
+        data={"csrf_token": csrf},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with Session(get_engine()) as session:
+        bot = session.get(Bot, bot_id)
+        assert bot is not None
+        assert bot.lifecycle_status == "active"
+        assert bot.live_config_version_id == live_id
+        assert bot.draft_config_version_id == draft_id
+
+
+def test_resume_paused_bot_checks_live_not_unpublished_draft(client: TestClient) -> None:
+    login(client)
+    with Session(get_engine()) as session:
+        bot = session.exec(select(Bot).where(Bot.name == "Default Bot")).one()
+        assert bot.id is not None
+        bot_id = bot.id
+        live_id = bot.live_config_version_id
+
+    behavior = client.get(f"/bots/{bot_id}/behavior")
+    csrf = csrf_from_page(behavior.text)
+    client.post(
+        f"/bots/{bot_id}/behavior",
+        data={
+            "csrf_token": csrf,
+            "system_prompt": "",
+            "tone": "professional",
+            "language": "auto",
+            "response_style": "concise",
+            "fallback_reply": "Please contact staff.",
+            "fallback_policy": "reply",
+            "custom_instructions": "",
+        },
+        follow_redirects=False,
+    )
+    with Session(get_engine()) as session:
+        bot = session.get(Bot, bot_id)
+        assert bot is not None
+        bot.lifecycle_status = "paused"
+        draft_id = bot.draft_config_version_id
+        assert draft_id is not None
+        session.add(bot)
+        session.commit()
+
+    csrf = csrf_from_page(client.get(f"/bots/{bot_id}").text)
+    response = client.post(
+        f"/bots/{bot_id}/resume",
+        data={"csrf_token": csrf},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with Session(get_engine()) as session:
+        bot = session.get(Bot, bot_id)
+        assert bot is not None
+        assert bot.lifecycle_status == "active"
+        assert bot.live_config_version_id == live_id
+        assert bot.draft_config_version_id == draft_id
+
+
+def test_workspace_pages_share_bot_navigation(client: TestClient) -> None:
+    login(client)
+    for path in ("/bots/1", "/bots/1/knowledge", "/bots/1/behavior", "/bots/1/rules"):
+        page = client.get(path)
+        assert page.status_code == 200
+        assert 'aria-label="Bot workspace navigation"' in page.text
+        for href in (
+            "/bots/1",
+            "/bots/1/behavior",
+            "/bots/1/knowledge",
+            "/channels",
+            "/bots/1/test",
+            "/conversations?bot_id=1",
+            "/bots/1/versions",
+        ):
+            assert f'href="{href}"' in page.text

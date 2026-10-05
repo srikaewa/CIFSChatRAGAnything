@@ -1,15 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="bot-workspace-header">
-  <div>
-    <p class="eyebrow">Bot Workspace · Knowledge</p>
-    <h1>{{ bot.name }}</h1>
-    <p>Bind an external Knowledge Service to a Draft without changing the current Live configuration.</p>
-  </div>
-  <span class="status-chip">{{ bot.lifecycle_status|title }}</span>
-</section>
-
-<p><a class="action-btn" href="/bots/{{ bot.id }}">Back to Overview</a></p>
+{% include "_bot_workspace_header.html" %}
 
 {% if saved %}
 <p class="alert alert-success" role="status">Draft Knowledge Service binding saved.</p>
