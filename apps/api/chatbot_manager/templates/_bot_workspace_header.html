@@ -16,7 +16,7 @@
   <a href="/bots/{{ bot.id }}" class="{{ 'active' if active_workspace_tab == 'overview' else '' }}">Overview</a>
   <a href="/bots/{{ bot.id }}/behavior" class="{{ 'active' if active_workspace_tab == 'behavior' else '' }}">Behavior</a>
   <a href="/bots/{{ bot.id }}/knowledge" class="{{ 'active' if active_workspace_tab == 'knowledge' else '' }}">Knowledge</a>
-  <a href="/channels">Channels</a>
+  <a href="/bots/{{ bot.id }}/channels" class="{{ 'active' if active_workspace_tab == 'channels' else '' }}">Channels</a>
   <a href="/bots/{{ bot.id }}/test" class="{{ 'active' if active_workspace_tab == 'test' else '' }}">Test</a>
   <a href="/conversations?bot_id={{ bot.id }}">Conversations</a>
   <a href="/bots/{{ bot.id }}/versions" class="{{ 'active' if active_workspace_tab == 'versions' else '' }}">Versions</a>

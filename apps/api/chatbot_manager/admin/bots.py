@@ -1,8 +1,17 @@
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
+from chatbot_manager.channel_config import CHANNEL_DEFINITIONS
+from chatbot_manager.credentials import (
+    masked_credential,
+    read_credential,
+    replace_credential,
+    store_credential,
+)
 from chatbot_manager.bots.service import get_live_config
 from chatbot_manager.bots.versions import (
     RuleInput,
@@ -15,6 +24,7 @@ from chatbot_manager.models import (
     Bot,
     BotConfigRule,
     BotConfigVersion,
+    ChannelConnection,
     KnowledgeService,
     utc_now,
 )
@@ -370,6 +380,117 @@ def create_bot_rule(
     return RedirectResponse(f"/bots/{bot_id}/rules?saved=1", status_code=303)
 
 
+@router.get("/{bot_id}/channels", response_class=HTMLResponse)
+def bot_channels_page(
+    bot_id: int,
+    request: Request,
+    saved: str | None = None,
+    admin_email: str = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    bot = _get_bot(session, bot_id)
+    context = _workspace_context(session, bot, active_workspace_tab="channels")
+    cards: list[dict[str, object]] = []
+    for definition in CHANNEL_DEFINITIONS.values():
+        connection = session.exec(
+            select(ChannelConnection)
+            .where(ChannelConnection.bot_id == bot_id)
+            .where(ChannelConnection.provider == definition.provider)
+        ).first()
+        masked = (
+            masked_credential(session, connection.credential_id)
+            if connection is not None and connection.credential_id is not None
+            else {}
+        )
+        cards.append(
+            {
+                "definition": definition,
+                "connection": connection,
+                "masked": masked,
+            }
+        )
+    context.update(
+        {
+            "admin_email": admin_email,
+            "active_page": "bots",
+            "channel_cards": cards,
+            "saved": saved == "1",
+        }
+    )
+    return templates.TemplateResponse(request, "bot_channels.html", context)
+
+
+@router.post("/{bot_id}/channels/{provider}")
+def update_bot_channel(
+    bot_id: int,
+    provider: str,
+    enabled: str | None = Form(None),
+    channel_secret: str = Form(""),
+    channel_access_token: str = Form(""),
+    verify_token: str = Form(""),
+    page_access_token: str = Form(""),
+    app_secret: str = Form(""),
+    bot_token: str = Form(""),
+    webhook_secret: str = Form(""),
+    admin_email: str = Depends(require_csrf),
+    session: Session = Depends(get_session),
+) -> Response:
+    del admin_email
+    _get_bot(session, bot_id)
+    definition = CHANNEL_DEFINITIONS.get(provider)
+    if definition is None:
+        raise HTTPException(status_code=404, detail="Unknown channel")
+
+    connection = session.exec(
+        select(ChannelConnection)
+        .where(ChannelConnection.bot_id == bot_id)
+        .where(ChannelConnection.provider == provider)
+    ).first()
+    current = (
+        read_credential(session, connection.credential_id)
+        if connection is not None and connection.credential_id is not None
+        else {}
+    )
+    incoming = {
+        "channel_secret": channel_secret,
+        "channel_access_token": channel_access_token,
+        "verify_token": verify_token,
+        "page_access_token": page_access_token,
+        "app_secret": app_secret,
+        "bot_token": bot_token,
+        "webhook_secret": webhook_secret,
+    }
+    credentials = {
+        field: incoming[field].strip() or current.get(field, "")
+        for field in definition.fields
+    }
+
+    credential_id = connection.credential_id if connection is not None else None
+    if credential_id is None:
+        credential = store_credential(session, f"channel:{provider}", credentials)
+        credential_id = credential.id
+    else:
+        replace_credential(session, credential_id, credentials)
+
+    is_enabled = enabled == "on"
+    configured = all(credentials.get(field, "").strip() for field in definition.required_fields)
+    status = "disabled" if not is_enabled else ("ready" if configured else "incomplete")
+    if connection is None:
+        connection = ChannelConnection(
+            bot_id=bot_id,
+            provider=provider,
+            display_name=definition.display_name,
+            webhook_key=uuid4().hex,
+        )
+    connection.credential_id = credential_id
+    connection.enabled = is_enabled
+    connection.status = status
+    connection.updated_at = utc_now()
+    session.add(connection)
+    session.commit()
+    return RedirectResponse(f"/bots/{bot_id}/channels?saved=1", status_code=303)
+
+
 @router.get("/{bot_id}/setup", response_class=HTMLResponse)
 def bot_setup_page(
     bot_id: int,
@@ -389,7 +510,7 @@ def bot_setup_page(
                 ("Profile", f"/bots/{bot_id}"),
                 ("Knowledge", f"/bots/{bot_id}/knowledge"),
                 ("Behavior", f"/bots/{bot_id}/behavior"),
-                ("Channels", "/channels"),
+                ("Channels", f"/bots/{bot_id}/channels"),
                 ("Test", f"/bots/{bot_id}/test"),
             ),
         }

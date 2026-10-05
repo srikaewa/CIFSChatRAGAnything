@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "_bot_workspace_header.html" %}
+
+{% if saved %}
+<p class="alert alert-success" role="status">Bot channel connection saved.</p>
+{% endif %}
+
+<section class="grid" aria-label="Bot channel connections">
+  {% for card in channel_cards %}
+  {% set definition = card.definition %}
+  {% set connection = card.connection %}
+  <article class="panel">
+    <h2>{{ definition.display_name }}</h2>
+    <p>Status: {{ connection.status|replace('_', ' ')|title if connection else "Not configured" }}</p>
+    <form class="form-grid" method="post" action="/bots/{{ bot.id }}/channels/{{ definition.provider }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <label class="checkbox-label">
+        <input type="checkbox" name="enabled" {{ "checked" if connection and connection.enabled else "" }}>
+        Enable {{ definition.display_name }}
+      </label>
+      {% for field in definition.fields %}
+      <label class="wide">{{ field|replace("_", " ")|title }}
+        <input name="{{ field }}" type="password" autocomplete="new-password" placeholder="{{ card.masked.get(field) or 'Not set' }}">
+      </label>
+      {% endfor %}
+      <button type="submit">Save {{ definition.display_name }}</button>
+    </form>
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}

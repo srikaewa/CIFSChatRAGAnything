@@ -1,8 +1,15 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from chatbot_manager.channel_connections import resolve_connection_credentials
 from chatbot_manager.db import get_engine
-from chatbot_manager.models import Bot, BotConfigRule, BotConfigVersion, KnowledgeService
+from chatbot_manager.models import (
+    Bot,
+    BotConfigRule,
+    BotConfigVersion,
+    ChannelConnection,
+    KnowledgeService,
+)
 
 
 def login(client: TestClient) -> None:
@@ -305,7 +312,7 @@ def test_setup_wizard_shows_profile_knowledge_behavior_channels_test_steps(clien
         "/bots/1",
         "/bots/1/knowledge",
         "/bots/1/behavior",
-        "/channels",
+        "/bots/1/channels",
         "/bots/1/test",
     ):
         assert f'href="{href}"' in page.text
@@ -470,9 +477,42 @@ def test_workspace_pages_share_bot_navigation(client: TestClient) -> None:
             "/bots/1",
             "/bots/1/behavior",
             "/bots/1/knowledge",
-            "/channels",
+            "/bots/1/channels",
             "/bots/1/test",
             "/conversations?bot_id=1",
             "/bots/1/versions",
         ):
             assert f'href="{href}"' in page.text
+
+
+def test_bot_channel_save_creates_bot_scoped_connection(client: TestClient) -> None:
+    login(client)
+    page = client.get("/bots/1/channels")
+    assert page.status_code == 200
+    csrf = csrf_from_page(page.text)
+
+    response = client.post(
+        "/bots/1/channels/line",
+        data={
+            "csrf_token": csrf,
+            "enabled": "on",
+            "channel_secret": "manual-secret",
+            "channel_access_token": "manual-token",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with Session(get_engine()) as session:
+        connection = session.exec(
+            select(ChannelConnection)
+            .where(ChannelConnection.bot_id == 1)
+            .where(ChannelConnection.provider == "line")
+        ).one()
+        assert connection.enabled is True
+        assert connection.status == "ready"
+        credentials = resolve_connection_credentials(session, connection)
+        assert credentials == {
+            "channel_secret": "manual-secret",
+            "channel_access_token": "manual-token",
+        }
