@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "_bot_workspace_header.html" %}
+
+<section class="panel">
+  <h2>Configuration Versions</h2>
+  <p>Published versions are immutable. Restore creates a new Draft and does not switch Live.</p>
+  <table class="data-table">
+    <thead><tr><th>Version</th><th>Status</th><th>Role</th><th>Created by</th><th>Action</th></tr></thead>
+    <tbody>
+      {% for version in versions %}
+      <tr>
+        <td>v{{ version.version_number }}</td>
+        <td>{{ version.status|title }}</td>
+        <td>
+          {% if bot.live_config_version_id == version.id %}Live
+          {% elif bot.draft_config_version_id == version.id %}Draft
+          {% else %}History{% endif %}
+        </td>
+        <td>{{ version.created_by or "—" }}</td>
+        <td>
+          {% if version.status == "published" and bot.live_config_version_id != version.id %}
+          <form method="post" action="/bots/{{ bot.id }}/versions/{{ version.id }}/restore">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+            <button type="submit">Restore as Draft</button>
+          </form>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">No versions.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

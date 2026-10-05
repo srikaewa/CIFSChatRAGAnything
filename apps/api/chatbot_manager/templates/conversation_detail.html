@@ -36,6 +36,12 @@
           {% if message.delivery_status %} · {{ message.delivery_status|title }}{% endif %}
         </div>
         <p>{{ message.content }}</p>
+        {% if message.sender_type == "user" %}
+        <form method="post" action="/conversations/{{ conversation.id }}/messages/{{ message.id }}/add-test-case">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+          <button type="submit" class="action-btn">Add to Test Suite</button>
+        </form>
+        {% endif %}
       </article>
       {% endif %}
     {% else %}

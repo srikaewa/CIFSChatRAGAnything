@@ -10,6 +10,7 @@ from chatbot_manager.db import get_session
 from chatbot_manager.models import (
     Bot,
     BotDecision,
+    BotTestCase,
     ChannelConnection,
     Conversation,
     ConversationHandoffEvent,
@@ -252,6 +253,37 @@ def conversation_detail(
                 )
             ),
         },
+    )
+
+
+@router.post("/{conversation_id}/messages/{message_id}/add-test-case")
+def add_message_to_test_suite(
+    conversation_id: int,
+    message_id: int,
+    admin_email: str = Depends(require_csrf),
+    session: Session = Depends(get_session),
+) -> Response:
+    conversation = _conversation(session, conversation_id)
+    message = session.get(ConversationMessage, message_id)
+    if message is None or message.conversation_id != conversation_id:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if message.sender_type != "user":
+        raise HTTPException(status_code=400, detail="only_user_messages_can_seed_tests")
+    session.add(
+        BotTestCase(
+            bot_id=conversation.bot_id,
+            name=f"Conversation {conversation_id} message {message_id}",
+            input_message=message.content,
+            expected_behavior_json="{}",
+            tags_json=json.dumps(["conversation"]),
+            enabled=False,
+            created_by=admin_email,
+        )
+    )
+    session.commit()
+    return RedirectResponse(
+        f"/bots/{conversation.bot_id}/test?case_created=1",
+        status_code=303,
     )
 
 

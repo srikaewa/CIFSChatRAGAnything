@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "_bot_workspace_header.html" %}
+
+{% if publish_error %}
+<p class="alert alert-error" role="alert"><strong>Publish blocked</strong> · <code>{{ publish_error }}</code></p>
+{% endif %}
+
+<section class="grid">
+  <article class="panel">
+    <h2>Draft under test</h2>
+    {% if draft %}
+    <p>Draft v{{ draft.version_number }} · Config {{ draft.id }}</p>
+    {% else %}
+    <p>No Draft is available.</p>
+    {% endif %}
+  </article>
+  <article class="panel">
+    <h2>Readiness</h2>
+    {% if readiness %}
+    <ul class="readiness-list">
+      {% for check in readiness.checks %}
+      <li><span class="status-chip">{{ check.status|title }}</span> {{ check.message }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No readiness result.</p>
+    {% endif %}
+  </article>
+</section>
+
+<section class="panel bot-workspace-note">
+  <h2>Interactive Test</h2>
+  <form class="form-grid" method="post" action="/bots/{{ bot.id }}/test/interactive">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+    <label class="wide">Message
+      <textarea name="input_message" rows="3" required>{{ interactive_input }}</textarea>
+    </label>
+    <button type="submit" {% if not draft %}disabled{% endif %}>Run Draft Test</button>
+  </form>
+  {% if interactive_result %}
+  <div class="panel">
+    <h2>Response</h2>
+    <p>{{ interactive_result.reply_text }}</p>
+    <h2>Decision Trace</h2>
+    <p>Config {{ interactive_result.config_version_id }} · {{ interactive_result.decision_type|title }} · refs {{ interactive_result.reference_count }} · {{ interactive_result.total_latency_ms }} ms{% if interactive_result.error_code %} · {{ interactive_result.error_code }}{% endif %}</p>
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel bot-workspace-note">
+  <h2>Live vs Draft</h2>
+  <form class="form-grid" method="post" action="/bots/{{ bot.id }}/test/compare">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+    <label class="wide">Message
+      <textarea name="input_message" rows="2" required>{{ interactive_input }}</textarea>
+    </label>
+    <button type="submit" {% if not live or not draft %}disabled{% endif %}>Compare Live / Draft</button>
+  </form>
+  {% if compare_results %}
+  <div class="grid">
+    <article class="panel">
+      <h2>Live</h2>
+      <p>{{ compare_results[0].reply_text }}</p>
+      <p>Config {{ compare_results[0].config_version_id }} · {{ compare_results[0].decision_type|title }}</p>
+    </article>
+    <article class="panel">
+      <h2>Draft</h2>
+      <p>{{ compare_results[1].reply_text }}</p>
+      <p>Config {{ compare_results[1].config_version_id }} · {{ compare_results[1].decision_type|title }}</p>
+    </article>
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel bot-workspace-note">
+  <h2>Saved Regression Tests</h2>
+  <form class="form-grid" method="post" action="/bots/{{ bot.id }}/test/cases">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+    <label>Name
+      <input type="text" name="name">
+    </label>
+    <label class="wide">Input message
+      <textarea name="input_message" rows="2" required></textarea>
+    </label>
+    <label class="wide">Expected behavior JSON
+      <textarea name="expected_behavior_json" rows="4">{}</textarea>
+    </label>
+    <label class="wide">Tags JSON
+      <input type="text" name="tags_json" value="[]">
+    </label>
+    <button type="submit">Save Test Case</button>
+  </form>
+
+  {% if cases %}
+  <table class="data-table">
+    <thead><tr><th>Name</th><th>Input</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody>
+      {% for case in cases %}
+      <tr>
+        <td>{{ case.name or "Untitled" }}</td>
+        <td>{{ case.input_message }}</td>
+        <td>{{ "Enabled" if case.enabled else "Disabled" }}</td>
+        <td>
+          <form method="post" action="/bots/{{ bot.id }}/test/cases/{{ case.id }}/toggle">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+            <button type="submit">{{ "Disable" if case.enabled else "Enable" }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No saved test cases yet.</p>
+  {% endif %}
+
+  <div class="panel-actions">
+    <form method="post" action="/bots/{{ bot.id }}/test/run">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <button class="action-btn" type="submit" {% if not draft %}disabled{% endif %}>Run All</button>
+    </form>
+    <form method="post" action="/bots/{{ bot.id }}/test/publish">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <label><input type="checkbox" name="acknowledge_warnings"> Acknowledge warnings</label>
+      <button class="action-btn" type="submit" {% if not draft %}disabled{% endif %}>Publish Draft</button>
+    </form>
+  </div>
+</section>
+
+{% if test_run %}
+<section class="panel bot-workspace-note">
+  <h2>Run {{ test_run.id }} · {{ test_run.status|upper }}</h2>
+  <table class="data-table">
+    <thead><tr><th>Input</th><th>Outcome</th><th>Decision</th><th>Response</th></tr></thead>
+    <tbody>
+      {% for result in test_results %}
+      <tr>
+        <td>{{ result.input_message }}</td>
+        <td>{{ result.outcome|upper }}</td>
+        <td>{{ result.decision_type }}</td>
+        <td>{{ result.actual_response }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}
