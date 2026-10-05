@@ -26,14 +26,14 @@ Default local login:
 
 ## Admin pages
 
-- Dashboard: channel and RAG status.
-- Channels: configure LINE, Messenger, and Telegram credentials and webhook state.
-- Rules: keyword/condition rules and replies.
+- Dashboard: command-center view for current operational status.
+- Bots: open a Bot Workspace for Overview, Behavior, Knowledge binding, Channels, Test Center, Conversations, and Versions. Draft edits stay separate from Live until publish.
+- Conversations: unified inbox, human handoff, operator replies, decision traces, and Add to Test Suite.
 - Knowledge Services: register external RAG-Anything/LightRAG endpoints, test connectivity/retrieval, and manage encrypted service credentials.
+- Test Center: run the Draft through the production BotRuntime in test mode, save regression cases, compare Live vs Draft, and publish only after readiness/regression gates pass.
+- Versions: inspect immutable published versions and restore an older version as a new Draft without switching Live immediately.
 - Knowledge files, indexing, reindexing, deletion, and knowledge-graph management are performed in the external RAG WebUI; CIFS stores only service bindings and credentials.
-- Assistant: prompts, fallback, RAG/LLM settings, and Telegram admin-notification destination.
-- Test Chat: exercise the same decision engine without provider/admin-notification side effects.
-- Logs: recent messages, answer source, replies, and delivery/notification outcomes.
+- Legacy `/assistant`, `/rules`, `/channels`, `/test-chat`, and `/logs` routes remain directly reachable for migration/debugging but are no longer primary navigation.
 
 ## Environment
 

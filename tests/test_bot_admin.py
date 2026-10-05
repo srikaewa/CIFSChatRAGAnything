@@ -49,6 +49,15 @@ def test_global_navigation_exposes_bots(client: TestClient) -> None:
     assert ">Bots<" in html
 
 
+def test_primary_navigation_is_bot_centric_after_phase_four(client: TestClient) -> None:
+    login(client)
+    html = client.get("/").text
+    for href in ("/bots", "/conversations", "/knowledge-services"):
+        assert f'href="{href}"' in html
+    for legacy_href in ("/assistant", "/rules", "/channels", "/test-chat", "/logs"):
+        assert f'href="{legacy_href}"' not in html
+
+
 def test_bot_overview_is_read_only_in_phase_one(client: TestClient) -> None:
     login(client)
     html = client.get("/bots/1").text
