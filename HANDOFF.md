@@ -362,3 +362,139 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - **Phase 3 is complete for implementation and local verification.**
 - Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-4-draft-test-publish.md`.
 - Keep `/home/srikaewa/Data-II/Projects/ChatBot/CIFSChatbotManager-phase3-worktree` on `feat/phase-3-runtime-conversations` for review/integration; do not modify `main` during Phase 3 closeout.
+
+## Phase 4 Execution Progress — 2026-10-05
+
+- Worktree: `/home/srikaewa/Data-II/Projects/ChatBot/CIFSChatbotManager/.worktrees/phase-4-draft-test-publish`
+- Registered JJ ACC workspace: `0a2a587a-6899-41e1-b91f-b77958ec0bb4` (`CIFSChatbotManager Phase4 Worktree`).
+- Branch: `feat/phase-4-draft-test-publish`, branched from Phase 3 completed head `dfa4364`.
+- Phase 4 plan: `docs/superpowers/plans/2026-09-13-phase-4-draft-test-publish.md`.
+- Baseline before Phase 4 changes: `uv run pytest -q` -> `252 passed in 9.40s`.
+
+### Task 1 — Version lifecycle service COMPLETE
+
+- Added `apps/api/chatbot_manager/bots/versions.py` with centralized deep-clone/version lifecycle helpers, Draft-only editable config/rule operations, restore-as-Draft, published immutability checks, and atomic Draft publish pointer switch.
+- `ensure_draft_config()` now delegates to the centralized lifecycle service.
+- RED: new version-service tests initially failed because `chatbot_manager.bots.versions` did not exist.
+- Targeted GREEN: `uv run pytest -q tests/test_version_service.py tests/test_bot_foundation.py` -> `12 passed in 0.35s`.
+- Full regression before commit: `259 passed in 8.37s`; `git diff --check` exit 0.
+- Commit: `3bed305` — `feat: add bot configuration version lifecycle`.
+
+### Task 2 — Saved regression tests and deterministic evaluator COMPLETE
+
+- Added `BotTestCase`, `BotTestRun`, and `BotTestResult` persistence models.
+- Added behavioral evaluator and `RegressionService`; assertions cover decision type, RAG use, references, escalation, fallback, required terms, and latency warnings without exact-response equality.
+- Important side-effect correction discovered before commit: initial suite implementation created synthetic `Conversation`, `ConversationMessage`, and `BotDecision` rows. A new RED assertion exposed this; the implementation was corrected so `test_mode=True` does not persist production decision rows and regression execution uses sentinel IDs without creating production conversation/message records. Only Bot test history persists.
+- Targeted GREEN: regression/runtime tests -> `10 passed in 0.51s`.
+- Full regression before commit: `264 passed in 8.26s`; `git diff --check` exit 0.
+- Commit: `36d2831` — `feat: add chatbot regression test service`.
+
+### Task 3 — Readiness checks COMPLETE
+
+- Added deterministic readiness service covering Bot profile, behavior coherence, Knowledge Service binding/health when RAG is expected, channel readiness using actual required credential fields, and saved regression-case presence.
+- Readiness performs no external calls; it reads persisted health state. No enabled channel and zero saved tests are warnings, while an enabled incomplete channel or unhealthy required Knowledge Service is a failure.
+- RED: `tests/test_readiness.py` initially failed because `chatbot_manager.testing.readiness` did not exist.
+- Targeted GREEN: `5 passed in 0.44s`.
+- Full regression before commit: `269 passed in 8.49s`; `git diff --check` exit 0.
+- Commit: `9848378` — `feat: add bot readiness checks`.
+
+### Task 4 — Publish gate and atomic publication COMPLETE
+
+- Added `PublishService` and `PublishBlocked` around the lifecycle publish primitive.
+- Gate order: load Bot/Draft -> readiness -> fresh Knowledge `test_connection()` when bound -> fresh regression suite on the exact Draft -> FAIL blocks -> WARNING requires explicit acknowledgement -> atomic `publish_draft()`.
+- Tests include the concurrent/runtime snapshot property: a request explicitly captured on v1 continues using v1 after v2 publishes, while a new default production request resolves v2.
+- RED: `tests/test_publish_flow.py` initially failed because `PublishBlocked`/publish gate did not exist.
+- Targeted GREEN: publish/version/runtime tests -> `16 passed in 0.89s`.
+- Full regression before commit: `273 passed in 9.51s`; `git diff --check` exit 0.
+- Commit: `7b30dbb` — `feat: enforce bot publish gate`.
+
+### Task 5 — Draft editing and Setup Wizard COMPLETE
+
+- Added Bot creation as lifecycle `draft` with a new Draft v1 and no Live version; create redirects into the Setup Wizard.
+- Added Draft-only Behavior, Knowledge binding, and deterministic Rules editing through the centralized version lifecycle service so published rows remain immutable.
+- Added shared Bot Workspace header/navigation with lifecycle, Live/Draft, Knowledge, and channel readiness signals; Overview, Behavior, Rules, and Knowledge use the shared workspace surface.
+- Added the ordered Setup Wizard flow: Profile -> Knowledge -> Behavior -> Channels -> Test, with readiness results shown before lifecycle progression.
+- Added lifecycle actions: Draft -> Ready after Draft readiness has no FAIL; Ready -> Active only with an existing Live config and readiness; Active -> Paused immediately; Paused -> Active only when the Live config passes readiness. Pause and resume do not alter Live/Draft pointers.
+- TDD evidence: first RED was `5 failed, 8 passed` for the intended missing Task 5 routes/UI; expanded lifecycle/workspace coverage was also observed RED at `9 failed, 8 passed` before implementation.
+- Bot admin GREEN: `17 passed in 1.65s`.
+- Plan targeted suite: `29 passed in 1.77s`.
+- Full regression before commit: `282 passed in 10.22s`.
+- Test-mode isolation rechecked explicitly: `1 passed in 0.41s`; regression execution still creates no production `Conversation`, `ConversationMessage`, or `BotDecision` rows.
+- `git diff --check` and staged `git diff --cached --check` both exited 0.
+- Commit: `81e0c48` — `feat: add bot draft editing and setup wizard`.
+- Ruling recorded in the SDD ledger: Setup Wizard is the guided pre-workspace flow from the approved spec; persistent workspace header/navigation begins on the Bot Workspace pages. Global legacy navigation now labels `/channels` as `Channel Connections` so the Wizard's ordered `Channels` step is unambiguous.
+
+### Task 6 — Test Center, Versions, Publish UI COMPLETE — 2026-10-06
+
+- Added `admin/test_center.py` and router wiring for Draft interactive testing, saved test cases/toggle/run, Live-vs-Draft compare, publish through the existing `PublishService`, Versions history, and restore-as-Draft.
+- Added `bot_test.html` and `bot_versions.html` using the shared Bot Workspace header/navigation.
+- Interactive and compare requests execute the real `BotRuntime` with explicit config IDs and `test_mode=True`; no provider delivery path is invoked and no production `Conversation`, `ConversationMessage`, or `BotDecision` rows are created.
+- Added conversation-message `Add to Test Suite`; only user messages are accepted. The seeded case is disabled, copies the exact user input, and starts with `expected_behavior_json={}` so no expected behavior is invented.
+- Publish failures render the stable `PublishBlocked` code without switching Live/Draft pointers.
+- Published-version restore creates a new higher-numbered Draft and leaves Live unchanged.
+- Diff review found and TDD-locked an operational lifecycle edge case: publishing a new Draft while a Bot is paused must not unpause it. RED: `test_publish_success_preserves_paused_lifecycle` failed with `active != paused`; GREEN after preserving `paused` during publish.
+- Initial Task 6 RED: `tests/test_test_center_admin.py` -> `6 failed` for missing Test/Versions/Add-to-Test-Suite surfaces.
+- Task 6 core GREEN: `6 passed in 0.92s`.
+- Plan targeted suite before edge fix: `15 passed in 1.12s`; final targeted suite after edge fix: `16 passed in 1.22s`.
+- Full regression before commit: `289 passed in 11.06s`.
+- `git diff --check` and staged `git diff --cached --check` exited 0.
+- Commit: `f149c8d` — `feat: add bot test and publish center`.
+
+### Task 7 — Bot-centric primary admin navigation COMPLETE — 2026-10-06
+
+- Primary navigation now keeps Dashboard, Bots, Conversations, and Knowledge Services as the global surfaces; legacy Assistant/Rules/Channels/Test Chat/Logs links were removed from the primary nav but their direct routes remain available for migration/debugging.
+- Legacy pages retain accessible location context: Channels/Rules/Assistant/Test Chat map the active primary surface to Bots, while Logs maps to Conversations.
+- README now documents Bot Workspace, Conversations, Knowledge Services, Test Center, and Versions as the current admin workflow.
+- RED: `uv run pytest -q tests/test_bot_admin.py tests/test_admin_routes.py` -> `1 failed, 44 passed` because legacy links were still present.
+- First full regression exposed one accessibility regression on direct `/channels`: no primary-nav item had `aria-current="page"`. The active-surface mapping above fixed that without restoring the legacy primary link.
+- Focused accessibility + Task 7 suite: `53 passed in 3.78s`.
+- Final full regression: `290 passed in 11.27s`.
+- Commit: `0a41848` — `refactor: make bot workspace primary admin surface`.
+
+### Task 8 — Phase 4 verification and manual publish checkpoint COMPLETE — 2026-10-06
+
+- Initial automated gate on Task 7 HEAD:
+  - focused Phase 4 suite -> `51 passed in 2.75s`;
+  - full suite -> `290 passed in 10.26s`;
+  - `uv run python -m compileall -q apps/api` -> exit 0;
+  - `uv lock --check` -> exit 0;
+  - `git diff --check` -> exit 0.
+- Manual checkpoint ran against an isolated in-memory SQLite database and a local fake LightRAG-compatible endpoint; it did not touch production data or real provider accounts.
+- Manual checkpoint entities: Knowledge Service ID 1 (`Phase 4 Manual RAG`); Bot ID 2 (`Phase 4 Manual Bot`).
+- The manual flow exposed a real Phase 4 gap: a new Bot's Workspace `Channels` link still opened the legacy global `/channels` page, and there was no route capable of creating a Bot-scoped `ChannelConnection`.
+- TDD correction:
+  - RED: Bot Workspace navigation + Bot-scoped channel save tests -> `2 failed`;
+  - implemented `/bots/{bot_id}/channels` GET/POST with encrypted replace-only credentials, one connection per Bot/provider, readiness-compatible status, and Bot Workspace/Setup Wizard links;
+  - targeted navigation/channel/readiness verification -> `8 passed in 0.77s`;
+  - commit: `72b7be8` — `fix: add bot-scoped channel connections`.
+- Manual UI checkpoint after that correction:
+  - registered/tested the local Knowledge Service -> Healthy;
+  - created Draft Bot 2 and selected the Knowledge Service;
+  - edited Behavior and added deterministic `hello -> Manual draft response` rule;
+  - attached an enabled Bot-scoped LINE connection with local dummy credentials -> Channels Pass;
+  - Interactive Test `hello` -> `Manual draft response`, Decision Trace `Config 2 · Rule`;
+  - created saved PASS case ID 1 and intentional failing case ID 2;
+  - observed regression `Run 1 · FAIL`;
+  - publish was blocked with `regression_failed`;
+  - explicitly disabled obsolete failing case ID 2;
+  - observed `Run 3 · PASS`, then successfully published -> Active / Live v1 / Draft —;
+  - edited Live-derived Draft v2, observed `Run 5 · PASS`, published -> Live v2;
+  - Versions restore of v1 created Draft v3 while Live remained v2;
+  - observed `Run 7 · PASS`, published restored Draft -> Active / Live v3 / Draft —;
+  - final local signals: Knowledge Healthy, Channels Pass.
+- Fresh automated verification after the Bot-scoped Channels correction:
+  - focused Phase 4 suite -> `52 passed in 2.94s`;
+  - full suite -> `291 passed in 10.42s`;
+  - `uv run python -m compileall -q apps/api` -> exit 0;
+  - `uv lock --check` -> exit 0;
+  - `git diff --check` and staged diff check -> exit 0.
+- Real-network limitation was freshly checked without printing secrets: this worktree has no configured LINE, Messenger, or Telegram environment credentials and no configured LLM API key; the default local database is not initialized to the current `ChannelConnection` schema. Therefore no real external-provider production message or real deployed external-RAG smoke is claimed. The local runtime/version behavior is covered by the passing publish/runtime regression tests and the isolated manual UI checkpoint above.
+- Temporary local app/RAG verification services were stopped after the checkpoint.
+
+### Phase 4 status
+
+- **Phase 4 Draft/Test/Publish is complete for implementation, automated verification, and isolated manual verification.**
+- Published-version immutability, Draft-only editing, Test Center isolation, readiness/regression publish gates, pause semantics, restore-as-Draft, Bot-scoped channel readiness, and Bot-centric navigation are all covered by tests.
+- The only unverified item is a real external-provider/deployed-RAG production smoke, because this worktree has no authorized live configuration.
+- Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-5-operations-monitoring.md`.
+- Continue in this Phase 4 worktree for review/integration; do not modify `main` unless explicitly authorized.
