@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlmodel import Session, select
 
+from chatbot_manager.knowledge.client import KnowledgeServiceClient
+from chatbot_manager.knowledge.service import build_knowledge_client
 from chatbot_manager.models import Bot, BotConfigRule, BotConfigVersion, utc_now
+
+if TYPE_CHECKING:
+    from chatbot_manager.testing.readiness import ReadinessService
+    from chatbot_manager.testing.regression import RegressionService
 
 
 EDITABLE_CONFIG_FIELDS = {
@@ -21,6 +29,10 @@ EDITABLE_CONFIG_FIELDS = {
 
 
 class VersionStateError(RuntimeError):
+    pass
+
+
+class PublishBlocked(RuntimeError):
     pass
 
 
@@ -254,3 +266,72 @@ def publish_draft(session: Session, bot_id: int, actor: str) -> BotConfigVersion
     session.commit()
     session.refresh(draft)
     return draft
+
+
+KnowledgeClientFactory = Callable[[Session, int], KnowledgeServiceClient]
+
+
+class PublishService:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        readiness_service: "ReadinessService | None" = None,
+        regression_service: "RegressionService | None" = None,
+        knowledge_client_factory: KnowledgeClientFactory = build_knowledge_client,
+    ) -> None:
+        if readiness_service is None:
+            from chatbot_manager.testing.readiness import ReadinessService
+
+            readiness_service = ReadinessService(session)
+        if regression_service is None:
+            from chatbot_manager.testing.regression import RegressionService
+
+            regression_service = RegressionService(session)
+        self._session = session
+        self._readiness = readiness_service
+        self._regression = regression_service
+        self._knowledge_client_factory = knowledge_client_factory
+
+    async def publish(
+        self,
+        bot_id: int,
+        actor: str,
+        acknowledge_warnings: bool = False,
+    ) -> BotConfigVersion:
+        bot = _get_bot(self._session, bot_id)
+        if bot.draft_config_version_id is None:
+            raise PublishBlocked("draft_version_missing")
+        draft = self._session.get(BotConfigVersion, bot.draft_config_version_id)
+        if draft is None or draft.status != "draft" or draft.id is None:
+            raise PublishBlocked("draft_version_missing")
+
+        readiness = self._readiness.evaluate(bot_id, draft.id)
+        readiness_failures = [
+            check for check in readiness.checks if check.status == "fail"
+        ]
+        warnings = [check for check in readiness.checks if check.status == "warning"]
+
+        if draft.knowledge_service_id is not None:
+            try:
+                knowledge = self._knowledge_client_factory(
+                    self._session,
+                    draft.knowledge_service_id,
+                )
+                health = await knowledge.test_connection()
+            except (LookupError, ValueError):
+                raise PublishBlocked("knowledge_service_unavailable") from None
+            if health.status.strip().lower() != "healthy":
+                raise PublishBlocked("knowledge_service_unhealthy")
+
+        run = await self._regression.run_suite(bot_id, draft.id, actor)
+        if run.status == "fail":
+            raise PublishBlocked("regression_failed")
+        if readiness_failures:
+            raise PublishBlocked("readiness_failed")
+        if run.status == "warning":
+            warnings.append(run)
+        if warnings and not acknowledge_warnings:
+            raise PublishBlocked("warnings_require_acknowledgement")
+
+        return publish_draft(self._session, bot_id, actor)
