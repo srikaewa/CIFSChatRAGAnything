@@ -498,3 +498,23 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - The only unverified item is a real external-provider/deployed-RAG production smoke, because this worktree has no authorized live configuration.
 - Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-5-operations-monitoring.md`.
 - Continue in this Phase 4 worktree for review/integration; do not modify `main` unless explicitly authorized.
+
+## Phase 5 Execution Progress — 2026-10-06
+
+### Task 1 — Incident persistence and deduplicating IncidentService COMPLETE
+
+- Continued in the existing `.worktrees/phase-4-draft-test-publish` worktree on `feat/phase-4-draft-test-publish`; Phase 4 was not redone.
+- Fresh Phase 5 baseline before changes: `rtk uv run pytest -q` -> `291 passed in 11.41s`.
+- RED: `rtk uv run pytest -q tests/test_incident_service.py` failed during collection because `Incident` was not yet implemented.
+- Added `Incident` persistence with indexed severity/source/type/dedup/status fields, first/last/resolved timestamps, JSON details/affected-Bot fields, and `external_notified_at` for the later alert task.
+- Added `IncidentSignal`, exact root-source dedup key (`<incident_type>:<source_type>_<source_id>`), and `IncidentService.observe/resolve/acknowledge`.
+- Active dedup searches only `open`/`acknowledged`; repeated observations update one active row while preserving `first_seen_at`; recovery resolves that row; a later recurrence creates a new incident instead of rewriting history.
+- Acknowledgement is lifecycle-only in Task 1. The `actor` argument is accepted but not persisted because neither the approved Incident spec nor the Task 1 schema defines acknowledgement actor/timestamp fields; actor-level audit remains a later concern rather than being hidden in mutable incident details.
+- Persistence/reload coverage closes and reopens a fresh SQLModel `Session`, confirming acknowledged state, details, and affected Bot IDs survive reload.
+- Focused GREEN: `4 passed in 0.47s`; final focused verification before commit: `4 passed in 0.44s`.
+- Full suite: `295 passed in 11.10s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 1 implementation commit: `7406243` — `feat: add deduplicated incident tracking`.
+- Next Phase 5 task: Task 2 — Runtime and Integration Health Checks.
