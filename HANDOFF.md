@@ -577,3 +577,24 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 4 implementation commit: `405ba4b` — `feat: add incident telegram alerts`.
 - Next Phase 5 task: Task 5 — Lightweight Operations Scheduler.
+
+### Task 5 — Lightweight Operations Scheduler COMPLETE
+
+- Task 5 started from clean HEAD `d6e16a5`; fresh baseline: `rtk uv run pytest -q` -> `315 passed in 13.41s`.
+- RED: `rtk uv run pytest -q tests/test_operations_scheduler.py` failed during collection because `chatbot_manager.operations.scheduler` did not yet exist.
+- Added `OperationsScheduler.run_once()` and `run_forever()` for the current single-instance deployment.
+- Health processing is evidence-aware: `unavailable`/`degraded` with warning/critical severity opens or updates an incident and invokes alert policy; only `healthy` is trusted recovery evidence; `unknown` neither opens nor resolves incidents.
+- Trusted healthy recovery resolves all active incident codes for the same root source, so recovery works even though failure codes such as `knowledge_service_unavailable` differ from healthy codes such as `knowledge_service_healthy`.
+- Component boundaries are isolated: system/Knowledge/channel health failures, per-signal processing failures, human-queue metric failures, RAG-latency evaluation failures, alert exceptions, and an unexpected outer iteration error do not terminate the periodic loop. Logs use stable component codes rather than external exception detail.
+- Human queue uses the existing `MetricService` at the configured warning/critical thresholds and emits one stable `human_wait_sla` incident; old waiting conversations remain eligible rather than disappearing from a short rolling window.
+- RAG SLA monitoring uses `BotDecision.retrieval_latency_ms` from the current poll interval and emits one stable `rag_latency_sla` incident at configured 3000/8000 ms warning/critical thresholds. Overall response latency is not incorrectly used as a RAG-latency proxy.
+- No fallback/escalation/RAG-failure percentage incidents were invented because the approved plan/spec defines no percentage thresholds for those analytics rates.
+- FastAPI lifespan now starts exactly one scheduler task/session after `init_db()`, stores the task/stop event on `app.state`, then sets the stop event, cancels, awaits, and closes the scheduler session on shutdown.
+- `/health` remains independent of scheduler success; a lifecycle test with a deliberately failing scheduler task still returns `200 {"status":"ok"}` and shuts down cleanly.
+- Focused verification: `rtk uv run pytest -q tests/test_operations_scheduler.py tests/test_app_boot.py` -> `12 passed in 0.56s`.
+- Fresh full suite: `322 passed in 14.58s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 5 implementation commit: `bc0132d` — `feat: add lightweight operations scheduler`.
+- Next Phase 5 task: Task 6 — Command Center, Incidents UI, and Analytics Drill-Down.
