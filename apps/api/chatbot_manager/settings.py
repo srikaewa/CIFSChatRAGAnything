@@ -31,7 +31,16 @@ class Settings(BaseSettings):
     messenger_page_access_token: str = ""
     messenger_app_secret: str = ""
     telegram_bot_token: str = ""
-    
+
+    ops_poll_seconds: int = 60
+    warning_persist_minutes: int = 15
+    human_wait_warning_minutes: int = 10
+    human_wait_critical_minutes: int = 30
+    rag_latency_warning_ms: int = 3000
+    rag_latency_critical_ms: int = 8000
+    alert_telegram_bot_token: str = ""
+    alert_telegram_chat_id: str = ""
+
     llm_provider: str = "openai_compatible"
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
