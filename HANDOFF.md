@@ -537,3 +537,22 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 2 implementation commit: `786b650` — `feat: add system and integration health checks`.
 - Next Phase 5 task: Task 3 — Operational and Quality Metrics.
+
+### Task 3 — Operational and Quality Metrics COMPLETE
+
+- Task 3 started from clean HEAD `46c62b8`; fresh baseline: `rtk uv run pytest -q` -> `302 passed in 11.49s`.
+- RED: `rtk uv run pytest -q tests/test_metrics_service.py` failed during collection because `chatbot_manager.operations.metrics` did not yet exist.
+- Added direct-query `MetricService.summary(start, end, bot_id=None)` plus typed `MetricSummary` / `MetricValue` results. No metric warehouse or duplicate message-content storage was introduced.
+- Quality metrics implemented with hand-checked formulas: Bot resolution rate, fallback rate, escalation rate, and RAG failure rate.
+- Bot resolution uses conversations started in the selected window and counts only `closed`/`bot_active` conversations with no durable `taken`/`assigned` handoff event; a later return to Bot does not erase prior human takeover.
+- RAG-attempt denominator includes successful `rag` decisions plus fallback/escalation decisions carrying `knowledge_*` errors, excluding `knowledge_service_not_configured` because no external query was attempted.
+- Operations metrics implemented: message count, average BotDecision response latency, and human-wait count. The wait warning threshold is a `MetricService` constructor argument defaulting to 10 minutes so Task 4 can later inject its setting without pre-implementing Task 4.
+- Every returned metric carries a `/conversations` drill-down URL; the required fallback contract is exactly `/conversations?bot_id=2&decision=fallback&from=2026-09-13T00:00:00&to=2026-09-13T23:59:59`.
+- Benchmark fixture used isolated file-backed SQLite with 10,000 `BotDecision` rows. Visible timing: `metric_summary_10000_seconds=0.107288` (an earlier run was `0.117315`). Direct summaries are comfortably sub-second, therefore no `MetricAggregate` table/model was added and `apps/api/chatbot_manager/models.py` remains unchanged.
+- Final focused Task 3 suite: `4 passed in 1.34s`.
+- Fresh full suite: `306 passed in 13.17s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 3 implementation commit: `2c95546` — `feat: add chatbot operations metrics`.
+- Next Phase 5 task: Task 4 — Telegram Alert Policy.
