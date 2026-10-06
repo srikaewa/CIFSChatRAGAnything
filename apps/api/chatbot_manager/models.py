@@ -145,6 +145,23 @@ class BotDecision(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now, index=True)
 
 
+class Incident(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    severity: str = Field(index=True)
+    source_type: str = Field(index=True)
+    source_id: str = Field(index=True)
+    incident_type: str = Field(index=True)
+    deduplication_key: str = Field(index=True)
+    status: str = Field(default="open", index=True)
+    first_seen_at: datetime = Field(default_factory=utc_now)
+    last_seen_at: datetime = Field(default_factory=utc_now)
+    resolved_at: Optional[datetime] = None
+    details_json: str = "{}"
+    affected_bot_ids_json: str = "[]"
+    external_notified_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class BotTestCase(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     bot_id: int = Field(index=True)
