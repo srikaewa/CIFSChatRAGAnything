@@ -1,34 +1,41 @@
 import base64
 import hashlib
 import hmac
+
 from cryptography.fernet import Fernet, InvalidToken
 from itsdangerous import BadSignature, SignatureExpired, URLSafeSerializer, URLSafeTimedSerializer
 
 from .settings import get_settings
 
 
-def verify_admin(email: str, password: str) -> bool:
-    settings = get_settings()
-    email_matches = hmac.compare_digest(email, settings.admin_email)
-    password_matches = hmac.compare_digest(password, settings.admin_password)
-    return email_matches and password_matches
+def make_session_token(user_id: int) -> str:
+    serializer = URLSafeTimedSerializer(
+        get_settings().app_secret_key,
+        salt="admin-session-v2",
+    )
+    return serializer.dumps({"user_id": user_id})
 
 
-def make_session_token(email: str) -> str:
-    serializer = URLSafeTimedSerializer(get_settings().app_secret_key, salt="admin-session")
-    return serializer.dumps({"email": email})
-
-
-def read_session_token(token: str | None, max_age_seconds: int | None = None) -> str | None:
+def read_session_user_id(
+    token: str | None,
+    max_age_seconds: int | None = None,
+) -> int | None:
     if not token:
         return None
     settings = get_settings()
-    serializer = URLSafeTimedSerializer(settings.app_secret_key, salt="admin-session")
+    serializer = URLSafeTimedSerializer(
+        settings.app_secret_key,
+        salt="admin-session-v2",
+    )
     try:
-        data = serializer.loads(token, max_age=max_age_seconds or settings.admin_session_max_age_seconds)
+        data = serializer.loads(
+            token,
+            max_age=max_age_seconds or settings.admin_session_max_age_seconds,
+        )
     except (BadSignature, SignatureExpired):
         return None
-    return str(data.get("email", ""))
+    user_id = data.get("user_id")
+    return int(user_id) if isinstance(user_id, int) else None
 
 
 def make_csrf_token(email: str) -> str:

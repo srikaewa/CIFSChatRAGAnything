@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
+from chatbot_manager.auth.service import authenticate_user
 from chatbot_manager.channel_config import CHANNEL_DEFINITIONS, channel_cards, channel_credentials, get_channel, save_channel, update_channel_credentials
 from chatbot_manager.bots.service import publish_legacy_default_bot_rules
 from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput, RESPONSE_GENERATION_FAILED_MESSAGE
@@ -18,7 +19,7 @@ from chatbot_manager.channels.telegram import TelegramAdapter
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
 from chatbot_manager.admin.telegram_ops import discover_tailscale_host, run_funnel, service_port
 from chatbot_manager.rag.service import rag_service_from_assistant
-from chatbot_manager.security import decrypt_secret, encrypt_secret, make_session_token, mask_secret, verify_admin
+from chatbot_manager.security import decrypt_secret, encrypt_secret, make_session_token, mask_secret
 from chatbot_manager.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -98,14 +99,20 @@ def login_page(request: Request) -> Response:
 
 
 @router.post("/login", response_class=HTMLResponse)
-def login_submit(request: Request, email: str = Form(...), password: str = Form(...)) -> Response:
-    if not verify_admin(email, password):
+def login_submit(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    session: Session = Depends(get_session),
+) -> Response:
+    user = authenticate_user(session, email, password)
+    if user is None or user.id is None:
         return templates.TemplateResponse(request, "login.html", {"error": "Invalid login"}, status_code=401)
     response = RedirectResponse("/", status_code=303)
     settings = get_settings()
     response.set_cookie(
         "admin_session",
-        make_session_token(email),
+        make_session_token(user.id),
         httponly=True,
         samesite="lax",
         secure=settings.cookie_secure,

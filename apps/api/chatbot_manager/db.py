@@ -60,12 +60,14 @@ def init_db() -> None:
     _migrate_sqlite_rule_conditions(active_engine)
     _migrate_sqlite_bot_links(active_engine)
 
+    from .auth.service import bootstrap_owner
     from .bots.service import ensure_default_bot
     from .channel_connections import migrate_legacy_channels
 
     with Session(active_engine) as session:
         ensure_default_bot(session)
         migrate_legacy_channels(session)
+        bootstrap_owner(session)
 
 
 def _migrate_sqlite_assistant_settings(active_engine: Engine) -> None:
