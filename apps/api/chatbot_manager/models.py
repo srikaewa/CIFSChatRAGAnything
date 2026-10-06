@@ -8,6 +8,37 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(index=True, unique=True)
+    password_hash: str
+    role: str = Field(default="operator", index=True)
+    active: bool = True
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class UserBotAccess(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True)
+    bot_id: int = Field(index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class AuditEvent(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    actor_user_id: Optional[int] = Field(default=None, index=True)
+    action: str = Field(index=True)
+    object_type: str = Field(index=True)
+    object_id: str = Field(index=True)
+    bot_id: Optional[int] = Field(default=None, index=True)
+    summary: str
+    before_json: str = "{}"
+    after_json: str = "{}"
+    request_metadata_json: str = "{}"
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+
+
 class Bot(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
