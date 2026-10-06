@@ -706,3 +706,24 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 3 implementation commit: `8c09181` — `feat: enforce role and bot scoped authorization`.
 - Next Phase 6 task: Task 4 — Add Owner User Management and Bot Assignment UI.
+
+### Task 4 — Add Owner User Management and Bot Assignment UI COMPLETE
+
+- Task 4 started from clean HEAD `4b75c93`.
+- RED: `rtk uv run pytest -q tests/test_user_admin.py` -> `9 failed`; every failure was the expected missing `/users` route/navigation behavior.
+- Added Owner-only `GET /users`, `POST /users`, `POST /users/{id}/update`, `POST /users/{id}/password`, and `POST /users/{id}/bots`.
+- The entire Users router is protected with `require_role("owner")`; Admin and Operator direct URLs return `403` even if navigation is hidden.
+- User creation normalizes email to lowercase, rejects duplicate email/invalid role, and hashes passwords with the existing recommended Argon2 hasher. Plaintext passwords and password hashes are never rendered after POST.
+- Role/active updates reject removal, demotion, or deactivation of the last active Owner with `400 last_active_owner`. The change is allowed when another active Owner remains.
+- Operator Bot access uses exact replacement semantics. Duplicate submitted IDs collapse naturally, nonexistent Bot IDs are rejected, and stale `UserBotAccess` rows are cleared whenever the user changes away from Operator.
+- Password reset replaces the stored hash only and redirects; the submitted password never appears in the response body.
+- Added the server-rendered Users administration page showing email, role, active state, and assigned Bot names only—never password hashes.
+- `require_current_user()` now stores the authenticated `CurrentUser` on `request.state`; `base.html` uses that state to show `Administration → Users` only for Owners without changing every route/template context.
+- Added minimal `.nav-section` styling so the Administration label is readable in the existing dark sidebar.
+- Focused verification after final UI styling: `rtk uv run pytest -q tests/test_user_admin.py tests/test_authorization.py` -> `19 passed in 6.17s`.
+- Fresh full suite from the exact commit candidate: `357 passed in 40.75s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --cached --check` -> exit 0.
+- Task 4 implementation commit: `5587e85` — `feat: add owner user administration`.
+- Next Phase 6 task: Task 5 — Add Sanitized Audit Service and Audit UI.
