@@ -622,3 +622,22 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 6 implementation commit: `ccaeadf` — `feat: add chatbot operations command center`.
 - Next Phase 5 task: Task 7 — Phase 5 Verification and Incident/Alert Manual Checkpoint.
+
+### Task 7 — Phase 5 Verification and Incident/Alert Manual Checkpoint COMPLETE
+
+- Task 7 started from clean HEAD `c29ec9f` with no source changes required.
+- Prescribed focused verification: `rtk uv run pytest -q tests/test_health_service.py tests/test_incident_service.py tests/test_metrics_service.py tests/test_alert_service.py tests/test_operations_scheduler.py tests/test_operations_admin.py` -> `40 passed in 2.83s`.
+- Fresh full suite: `331 passed in 17.93s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` -> exit 0.
+- Operational thresholds verified: warning persistence `15 min`; alert cooldown `15 min`; human-wait warning/critical `10/30 min`; RAG retrieval-latency warning/critical `3000/8000 ms`.
+- Alert destination probe was intentionally boolean-only and exposed no secret values. Current environment: operational Telegram token **not configured**, operational Telegram chat **not configured**, dashboard local.
+- Because no operational Telegram destination is configured, the checkpoint used the production `TelegramAlertService` with `respx`-mocked Telegram HTTP plus a mocked Knowledge Service endpoint. This exercised the real alert policy/sender code without sending an external message or recording any token.
+- Shared Knowledge Service outage checkpoint: one critical root incident **ID 1**, affected Bot IDs `[1, 2, 3]`, one initial mocked Telegram call; duplicate poll remained at one call.
+- Recovery checkpoint: restoring Knowledge Service health resolved the same incident **ID 1** with a recovery timestamp; one recovery notification raised mocked Telegram call count to two; duplicate recovery remained at two.
+- Warning persistence checkpoint: a human-queue conversation beyond the 10-minute warning SLA created warning incident **ID 2** immediately while Telegram call count remained unchanged. After the incident was made older than the 15-minute warning-persistence threshold, exactly one warning notification was emitted; immediate duplicate was suppressed by policy/cooldown.
+- Targeted HTTP/UI checkpoint: five route tests passed in `1.11s`, covering Needs Attention -> Inbox/source actions, one shared incident card with affected Bots, fallback Analytics drill-down URL, actual filtered conversation results, and incident detail/acknowledgement.
+- Plan/spec reconciliation: Task 7's phrase `force warning-only fallback-rate threshold` has no matching approved fallback percentage threshold in the authoritative spec; fallback rate is defined only as a metric. Consistent with Task 5, no percentage threshold was invented. Warning-to-Telegram persistence was validated with the approved human-queue warning incident instead.
+- Phase 5 Operations Monitoring is complete locally. No push, merge, deploy, main-branch modification, or real Telegram delivery was performed.
+- Next plan: `docs/superpowers/plans/2026-09-13-phase-6-multi-user-hardening-cleanup.md` — Phase 6 Multi-User Hardening and Legacy Cleanup.
