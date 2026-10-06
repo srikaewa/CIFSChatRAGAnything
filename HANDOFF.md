@@ -684,3 +684,25 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 2 implementation commit: `6eed6d5` — `feat: add database backed user authentication`.
 - Next Phase 6 task: Task 3 — Enforce Role and Bot-Scope Authorization Server-Side.
+
+### Task 3 — Enforce Role and Bot-Scope Authorization Server-Side COMPLETE
+
+- Task 3 started from clean HEAD `38a6cac`; the immediately preceding full suite at that state was `338 passed`.
+- Initial authorization RED, after correcting one test-only unique-email collision, was `6 failed, 3 passed`; failures were exactly the missing unassigned Bot/conversation direct-URL gates, Bot mutation gate, Bot list filtering, Bot-scoped Analytics gate, and global admin-surface gate.
+- Added `auth/authorization.py` with `CurrentUser(id, email, role, allowed_bot_ids)`, `require_current_user`, `require_role`, `can_manage_bot`, and `require_bot_access`.
+- Operators load explicit `UserBotAccess` rows into `allowed_bot_ids`; Owner/Admin use the documented empty-set sentinel because their roles grant global Bot visibility.
+- Bot-specific routes share one server-side path dependency: path `bot_id` is authorized against the persisted Bot; every non-GET Bot/test route is Owner/Admin only. `/bots` list itself is filtered to assigned Bots for Operators.
+- Conversation-specific routes share one server-side dependency that loads the Conversation from the DB and derives its `bot_id`; client query/path Bot IDs are never trusted as the authorization source. Operator conversation lists are also filtered to assigned Bots.
+- Operators can use assigned-Bot Inbox read/take/reply/return/close/note flows and assigned-Bot Analytics read-only. Add-to-test-suite and explicit conversation assignment remain manager-only because those actions are outside the approved Operator action list.
+- `/analytics` requires an explicit assigned `bot_id` for Operators; global Analytics and unassigned Bot Analytics return 403.
+- Knowledge Services, Incidents, Command Center, and legacy global administrative routes are Owner/Admin only.
+- Task 3's sample expects Admin `/users` -> 403, but the actual `/users` route is intentionally created in Task 4. No placeholder Users page was added; Task 3 provides the Owner-only `require_role("owner")` dependency for the real Task 4 route.
+- CSRF remains signed against the authenticated persisted User email. Authorization decisions use only `CurrentUser.id`, role, and Bot assignments; keeping the existing email-bound form token avoids rewriting roughly 40 forms and remains database-user-bound.
+- Authorization suite: `rtk uv run pytest -q tests/test_authorization.py` -> `9 passed in 2.82s`.
+- Required focused verification: `rtk uv run pytest -q tests/test_authorization.py tests/test_admin_routes.py tests/test_csrf_security.py tests/test_session_security.py tests/test_conversations_admin.py tests/test_test_center_admin.py` -> `61 passed in 12.11s`.
+- Fresh full suite: `347 passed in 38.87s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 3 implementation commit: `8c09181` — `feat: enforce role and bot scoped authorization`.
+- Next Phase 6 task: Task 4 — Add Owner User Management and Bot Assignment UI.
