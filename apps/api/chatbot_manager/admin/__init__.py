@@ -8,6 +8,7 @@ from .incidents import router as incidents_router
 from .knowledge_services import router as knowledge_services_router
 from .routes import router as legacy_router
 from .test_center import router as test_center_router
+from .users import router as users_router
 
 
 router = APIRouter()
@@ -19,5 +20,6 @@ router.include_router(conversations_router)
 router.include_router(knowledge_services_router)
 router.include_router(analytics_router)
 router.include_router(incidents_router)
+router.include_router(users_router)
 
 __all__ = ["router"]

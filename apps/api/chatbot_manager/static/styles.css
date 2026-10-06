@@ -89,6 +89,15 @@ textarea {
   color: oklch(0.92 0.01 250);
 }
 
+.nav-section {
+  margin: 12px 12px 0;
+  color: oklch(0.62 0.015 250);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .main {
   margin-left: 240px;
   min-height: 100vh;

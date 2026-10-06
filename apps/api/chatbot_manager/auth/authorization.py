@@ -43,12 +43,14 @@ def require_current_user(
                 select(UserBotAccess.bot_id).where(UserBotAccess.user_id == user.id)
             ).all()
         )
-    return CurrentUser(
+    current_user = CurrentUser(
         id=user.id,
         email=user.email,
         role=user.role,
         allowed_bot_ids=allowed_bot_ids,
     )
+    request.state.current_user = current_user
+    return current_user
 
 
 def require_role(*allowed_roles: str):

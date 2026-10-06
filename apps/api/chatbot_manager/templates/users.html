@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <p class="eyebrow">Administration</p>
+  <h1>Users</h1>
+  <p>Create administrators and operators, reset credentials, and assign Operators to Bots.</p>
+</section>
+
+<section class="panel">
+  <h2>Create user</h2>
+  <form method="post" action="/users" class="operations-filters">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+    <label>Email <input type="email" name="email" required></label>
+    <label>Password <input type="password" name="password" required></label>
+    <label>Role
+      <select name="role">
+        {% for role in roles %}<option value="{{ role }}">{{ role|title }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit">Create user</button>
+  </form>
+</section>
+
+<section class="operations-section">
+  <div class="section-heading"><h2>Existing users</h2></div>
+  <div class="attention-list">
+    {% for row in user_rows %}
+    {% set user = row.user %}
+    <article class="panel" data-user-id="{{ user.id }}">
+      <div class="attention-card-head">
+        <div>
+          <h3>{{ user.email }}</h3>
+          <p>{{ user.role|title }} · {{ "Active" if user.active else "Inactive" }}</p>
+          {% if row.assigned_bots %}
+          <p>Assigned Bots: {% for bot in row.assigned_bots %}{{ bot.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <form method="post" action="/users/{{ user.id }}/update" class="operations-filters">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <label>Role
+          <select name="role">
+            {% for role in roles %}
+            <option value="{{ role }}" {% if role == user.role %}selected{% endif %}>{{ role|title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label><input type="checkbox" name="active" value="on" {% if user.active %}checked{% endif %}> Active</label>
+        <button type="submit">Update</button>
+      </form>
+
+      <form method="post" action="/users/{{ user.id }}/password" class="operations-filters">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <label>New password <input type="password" name="password" required></label>
+        <button type="submit">Reset password</button>
+      </form>
+
+      {% if user.role == "operator" %}
+      <form method="post" action="/users/{{ user.id }}/bots" class="operations-filters">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <fieldset>
+          <legend>Bot access</legend>
+          {% for bot in bots %}
+          <label>
+            <input type="checkbox" name="bot_ids" value="{{ bot.id }}"
+              {% if bot in row.assigned_bots %}checked{% endif %}>
+            {{ bot.name }}
+          </label>
+          {% else %}
+          <p>No Bots available.</p>
+          {% endfor %}
+        </fieldset>
+        <button type="submit">Save Bot access</button>
+      </form>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
