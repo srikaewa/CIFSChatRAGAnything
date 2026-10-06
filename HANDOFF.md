@@ -598,3 +598,27 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 5 implementation commit: `bc0132d` — `feat: add lightweight operations scheduler`.
 - Next Phase 5 task: Task 6 — Command Center, Incidents UI, and Analytics Drill-Down.
+
+### Task 6 — Command Center, Incidents UI, and Analytics Drill-Down COMPLETE
+
+- Task 6 started from clean HEAD `132c477`; fresh baseline: `rtk uv run pytest -q` -> `322 passed in 14.45s`.
+- Initial RED: `rtk uv run pytest -q tests/test_operations_admin.py` -> 8 failed, covering the missing Command Center, shared incident rendering, Analytics drill-down, system status, Bot health summary, Incidents UI/acknowledgement, real conversation filtering, and Phase 5 navigation.
+- Replaced the effective `/` root with a new Command Center router registered before the legacy router, preserving legacy compatibility routes without deleting them in Phase 5.
+- Command Center shows deterministic system status, fleet counts, channel evidence, Knowledge Service health, today's conversations, human queue, open incidents, Needs Attention cards with direct source actions, and compact Bot fleet rows.
+- Needs Attention is ordered Critical before Warning/Info; one shared Knowledge Service incident renders once with all affected Bot names.
+- System status is `Critical` when a critical incident is global or affects an active Bot; otherwise active incidents produce `Degraded`. A further regression guard ensures an active Bot with only configured/ready channel evidence is also `Degraded`, not `Healthy`, because Task 2 established that channel configuration/recent traffic is not active health proof.
+- Added `/incidents` filters for severity/status/source, `/incidents/<id>` detail with timeline/source/affected Bots/recovery state, and CSRF-protected acknowledgement.
+- Added `/analytics` with server-rendered Operations and Quality sections. Every metric uses the drill-down URL returned by `MetricService`; no decorative chart or client chart dependency was added.
+- Extended `/conversations` to honor the existing MetricService drill-down contract: `bot_id`, `decision`, `from`, and `to`. `decision=knowledge_error` maps to `knowledge_*` decision errors; other decisions match `BotDecision.decision_type`.
+- Bot Overview now shows compact Operational health, Channel evidence, live Knowledge dependency, Activity today, active incident count, and Bot-scoped Analytics link; it does not embed global analytics/BI charts.
+- Bot workspace navigation now includes a Bot-scoped Analytics link.
+- Approved global navigation is now: Command Center, Bots, Conversations, Knowledge Services, Analytics, Incidents. No empty User/System Settings pages were added.
+- Compatibility regression found by first full suite: legacy `test_dashboard_uses_saved_channel_config_state` expected `LINE` and `Configured` at `/`. Fixed by rendering compact `channel_cards` evidence in Command Center; targeted compatibility + Task 6 tests -> `9 passed in 1.17s`.
+- Health-invariant regression: exact-node RED `test_system_status_is_degraded_when_active_channel_health_is_unverified` failed because Command Center showed Healthy; fixed to Degraded. (An earlier `-k unverified_active_channel` command selected no tests; it was only a command-selection mistake.) Final Task 6 suite -> `9 passed in 1.36s`.
+- Final required cross-surface verification: `rtk uv run pytest -q tests/test_operations_admin.py tests/test_bot_admin.py tests/test_conversations_admin.py` -> `35 passed in 3.94s`.
+- Fresh full suite: `331 passed in 16.75s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 6 implementation commit: `ccaeadf` — `feat: add chatbot operations command center`.
+- Next Phase 5 task: Task 7 — Phase 5 Verification and Incident/Alert Manual Checkpoint.
