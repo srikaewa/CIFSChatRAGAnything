@@ -5,7 +5,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
-from chatbot_manager.auth.authorization import require_bot_route_authorization
+from chatbot_manager.audit import record_audit
+from chatbot_manager.auth.authorization import (
+    CurrentUser,
+    require_bot_route_authorization,
+    require_current_user,
+)
 from chatbot_manager.bots.versions import (
     PublishBlocked,
     PublishService,
@@ -246,9 +251,15 @@ async def publish_from_test_center(
     request: Request,
     acknowledge_warnings: str | None = Form(None),
     admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
     bot = _get_bot(session, bot_id)
+    before = {
+        "lifecycle_status": bot.lifecycle_status,
+        "live_config_version_id": bot.live_config_version_id,
+        "draft_config_version_id": bot.draft_config_version_id,
+    }
     try:
         await PublishService(session).publish(
             bot_id,
@@ -270,6 +281,21 @@ async def publish_from_test_center(
     bot.updated_at = utc_now()
     session.add(bot)
     session.commit()
+    record_audit(
+        session,
+        current_user,
+        "bot.publish",
+        "bot",
+        str(bot_id),
+        f"Published Bot {bot.name}",
+        bot_id=bot_id,
+        before=before,
+        after={
+            "lifecycle_status": bot.lifecycle_status,
+            "live_config_version_id": bot.live_config_version_id,
+            "draft_config_version_id": bot.draft_config_version_id,
+        },
+    )
     return RedirectResponse(f"/bots/{bot_id}/test?published=1", status_code=303)
 
 

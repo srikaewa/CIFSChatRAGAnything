@@ -11,6 +11,7 @@ from chatbot_manager.admin.dependencies import (
     require_manager_csrf,
     templates,
 )
+from chatbot_manager.audit import record_audit
 from chatbot_manager.auth.authorization import (
     CurrentUser,
     require_conversation_route_authorization,
@@ -348,13 +349,28 @@ def add_message_to_test_suite(
 def take_conversation(
     conversation_id: int,
     admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
+    conversation = _conversation(session, conversation_id)
+    before = {"status": conversation.status, "assigned_operator_id": conversation.assigned_operator_id}
     try:
         HandoffService(session).take(conversation_id, TEMP_OPERATOR_ID)
     except ConversationStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     _system_message(session, conversation_id, f"Taken by {admin_email}", admin_email)
+    session.refresh(conversation)
+    record_audit(
+        session,
+        current_user,
+        "conversation.take",
+        "conversation",
+        str(conversation_id),
+        f"Took conversation {conversation_id}",
+        bot_id=conversation.bot_id,
+        before=before,
+        after={"status": conversation.status, "assigned_operator_id": conversation.assigned_operator_id},
+    )
     return _redirect(conversation_id, "taken")
 
 
@@ -362,8 +378,11 @@ def take_conversation(
 def assign_conversation(
     conversation_id: int,
     admin_email: str = Depends(require_manager_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
+    conversation = _conversation(session, conversation_id)
+    before = {"status": conversation.status, "assigned_operator_id": conversation.assigned_operator_id}
     try:
         HandoffService(session).assign(
             conversation_id,
@@ -373,6 +392,18 @@ def assign_conversation(
     except ConversationStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     _system_message(session, conversation_id, f"Assigned to {admin_email}", admin_email)
+    session.refresh(conversation)
+    record_audit(
+        session,
+        current_user,
+        "conversation.assign",
+        "conversation",
+        str(conversation_id),
+        f"Assigned conversation {conversation_id}",
+        bot_id=conversation.bot_id,
+        before=before,
+        after={"status": conversation.status, "assigned_operator_id": conversation.assigned_operator_id},
+    )
     return _redirect(conversation_id, "assigned")
 
 
@@ -431,8 +462,11 @@ async def reply_to_conversation(
 def return_to_bot(
     conversation_id: int,
     admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
+    conversation = _conversation(session, conversation_id)
+    before = {"status": conversation.status, "assigned_operator_id": conversation.assigned_operator_id}
     try:
         HandoffService(session).return_to_bot(
             conversation_id,
@@ -441,6 +475,18 @@ def return_to_bot(
     except ConversationStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     _system_message(session, conversation_id, f"Returned to Bot by {admin_email}", admin_email)
+    session.refresh(conversation)
+    record_audit(
+        session,
+        current_user,
+        "conversation.return_to_bot",
+        "conversation",
+        str(conversation_id),
+        f"Returned conversation {conversation_id} to Bot",
+        bot_id=conversation.bot_id,
+        before=before,
+        after={"status": conversation.status, "assigned_operator_id": conversation.assigned_operator_id},
+    )
     return _redirect(conversation_id, "returned")
 
 
@@ -449,8 +495,11 @@ def close_conversation(
     conversation_id: int,
     reason: str = Form("resolved"),
     admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
+    conversation = _conversation(session, conversation_id)
+    before = {"status": conversation.status, "assigned_operator_id": conversation.assigned_operator_id}
     try:
         HandoffService(session).close(
             conversation_id,
@@ -460,6 +509,18 @@ def close_conversation(
     except ConversationStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     _system_message(session, conversation_id, f"Closed by {admin_email}", admin_email)
+    session.refresh(conversation)
+    record_audit(
+        session,
+        current_user,
+        "conversation.close",
+        "conversation",
+        str(conversation_id),
+        f"Closed conversation {conversation_id}",
+        bot_id=conversation.bot_id,
+        before=before,
+        after={"status": conversation.status, "assigned_operator_id": conversation.assigned_operator_id},
+    )
     return _redirect(conversation_id, "closed")
 
 

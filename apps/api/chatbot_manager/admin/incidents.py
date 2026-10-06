@@ -7,7 +7,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
-from chatbot_manager.auth.authorization import require_role
+from chatbot_manager.audit import record_audit
+from chatbot_manager.auth.authorization import CurrentUser, require_current_user, require_role
 from chatbot_manager.db import get_session
 from chatbot_manager.models import Bot, Incident
 from chatbot_manager.operations.incidents import IncidentService
@@ -106,7 +107,19 @@ def incident_detail(
 def acknowledge_incident(
     incident_id: int,
     admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
-    IncidentService(session).acknowledge(incident_id, admin_email)
+    before = _incident(session, incident_id).status
+    row = IncidentService(session).acknowledge(incident_id, admin_email)
+    record_audit(
+        session,
+        current_user,
+        "incident.acknowledge",
+        "incident",
+        str(incident_id),
+        f"Acknowledged incident {incident_id}",
+        before={"status": before},
+        after={"status": row.status},
+    )
     return RedirectResponse(f"/incidents/{incident_id}", status_code=303)

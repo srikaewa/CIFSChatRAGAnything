@@ -16,9 +16,12 @@
         <a href="/knowledge-services" class="{{ 'active' if active_page == 'knowledge_services' else '' }}" {% if active_page == 'knowledge_services' %}aria-current="page"{% endif %}>Knowledge Services</a>
         <a href="/analytics" class="{{ 'active' if active_page == 'analytics' else '' }}" {% if active_page == 'analytics' %}aria-current="page"{% endif %}>Analytics</a>
         <a href="/incidents" class="{{ 'active' if active_page == 'incidents' else '' }}" {% if active_page == 'incidents' %}aria-current="page"{% endif %}>Incidents</a>
-        {% if request.state.current_user is defined and request.state.current_user.role == "owner" %}
+        {% if request.state.current_user is defined and request.state.current_user.role in ["owner", "admin"] %}
         <span class="nav-section">Administration</span>
+        <a href="/audit" class="{{ 'active' if active_page == 'audit' else '' }}" {% if active_page == 'audit' %}aria-current="page"{% endif %}>Audit</a>
+        {% if request.state.current_user.role == "owner" %}
         <a href="/users" class="{{ 'active' if active_page == 'users' else '' }}" {% if active_page == 'users' %}aria-current="page"{% endif %}>Users</a>
+        {% endif %}
         {% endif %}
       </nav>
     </aside>

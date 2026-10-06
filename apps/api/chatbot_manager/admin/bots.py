@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
+from chatbot_manager.audit import record_audit
 from chatbot_manager.auth.authorization import (
     CurrentUser,
     require_bot_route_authorization,
@@ -640,6 +641,7 @@ def activate_bot(
 def pause_bot(
     bot_id: int,
     admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
     bot = _get_bot(session, bot_id)
@@ -648,6 +650,17 @@ def pause_bot(
             f"/bots/{bot_id}?error=invalid_lifecycle_transition", status_code=303
         )
     _set_lifecycle(bot, "paused", session)
+    record_audit(
+        session,
+        current_user,
+        "bot.pause",
+        "bot",
+        str(bot_id),
+        f"Paused Bot {bot.name}",
+        bot_id=bot_id,
+        before={"status": "active"},
+        after={"status": "paused"},
+    )
     return RedirectResponse(f"/bots/{bot_id}", status_code=303)
 
 
@@ -655,6 +668,7 @@ def pause_bot(
 def resume_bot(
     bot_id: int,
     admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
     bot = _get_bot(session, bot_id)
@@ -666,4 +680,15 @@ def resume_bot(
     if not _readiness_allows_transition(session, bot, live):
         return RedirectResponse(f"/bots/{bot_id}?error=readiness_failed", status_code=303)
     _set_lifecycle(bot, "active", session)
+    record_audit(
+        session,
+        current_user,
+        "bot.resume",
+        "bot",
+        str(bot_id),
+        f"Resumed Bot {bot.name}",
+        bot_id=bot_id,
+        before={"status": "paused"},
+        after={"status": "active"},
+    )
     return RedirectResponse(f"/bots/{bot_id}", status_code=303)

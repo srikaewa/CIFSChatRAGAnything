@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from .analytics import router as analytics_router
+from .audit import router as audit_router
 from .bots import router as bots_router
 from .command_center import router as command_center_router
 from .conversations import router as conversations_router
@@ -20,6 +21,7 @@ router.include_router(conversations_router)
 router.include_router(knowledge_services_router)
 router.include_router(analytics_router)
 router.include_router(incidents_router)
+router.include_router(audit_router)
 router.include_router(users_router)
 
 __all__ = ["router"]

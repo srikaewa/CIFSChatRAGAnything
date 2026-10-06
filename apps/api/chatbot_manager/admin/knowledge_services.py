@@ -6,7 +6,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
-from chatbot_manager.auth.authorization import require_role
+from chatbot_manager.audit import record_audit
+from chatbot_manager.auth.authorization import CurrentUser, require_current_user, require_role
 from chatbot_manager.credentials import masked_credential, replace_credential, store_credential
 from chatbot_manager.db import get_session
 from chatbot_manager.knowledge.client import KnowledgeQuery, KnowledgeServiceError
@@ -116,6 +117,7 @@ def create_knowledge_service(
     webui_url: str = Form(""),
     api_key: str = Form(""),
     admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
     del admin_email
@@ -148,6 +150,22 @@ def create_knowledge_service(
     )
     session.add(service)
     session.commit()
+    session.refresh(service)
+    record_audit(
+        session,
+        current_user,
+        "knowledge.create",
+        "knowledge_service",
+        str(service.id),
+        f"Created Knowledge Service {service.name}",
+        after={
+            "name": service.name,
+            "api_base_url": service.api_base_url,
+            "webui_url": service.webui_url,
+            "enabled": service.enabled,
+            "credential_configured": service.credential_id is not None,
+        },
+    )
     return RedirectResponse("/knowledge-services?saved=1", status_code=303)
 
 
@@ -160,12 +178,20 @@ def update_knowledge_service(
     api_key: str = Form(""),
     enabled: str | None = Form(None),
     admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
     del admin_email
     service = session.get(KnowledgeService, service_id)
     if service is None:
         raise HTTPException(status_code=404, detail="Knowledge Service not found")
+    before = {
+        "name": service.name,
+        "api_base_url": service.api_base_url,
+        "webui_url": service.webui_url,
+        "enabled": service.enabled,
+        "credential_configured": service.credential_id is not None,
+    }
 
     normalized_api = api_base_url.strip().rstrip("/")
     normalized_webui = webui_url.strip()
@@ -200,6 +226,44 @@ def update_knowledge_service(
     service.updated_at = utc_now()
     session.add(service)
     session.commit()
+    after = {
+        "name": service.name,
+        "api_base_url": service.api_base_url,
+        "webui_url": service.webui_url,
+        "enabled": service.enabled,
+        "credential_configured": service.credential_id is not None,
+    }
+    record_audit(
+        session,
+        current_user,
+        "knowledge.update",
+        "knowledge_service",
+        str(service_id),
+        f"Updated Knowledge Service {service.name}",
+        before=before,
+        after=after,
+    )
+    if api_key:
+        record_audit(
+            session,
+            current_user,
+            "knowledge.credential_replace",
+            "knowledge_service",
+            str(service_id),
+            f"Replaced credential for Knowledge Service {service.name}",
+            after={"credential_replaced": True},
+        )
+    if before["enabled"] and not service.enabled:
+        record_audit(
+            session,
+            current_user,
+            "knowledge.disable",
+            "knowledge_service",
+            str(service_id),
+            f"Disabled Knowledge Service {service.name}",
+            before={"enabled": True},
+            after={"enabled": False},
+        )
     return RedirectResponse("/knowledge-services?saved=1", status_code=303)
 
 
