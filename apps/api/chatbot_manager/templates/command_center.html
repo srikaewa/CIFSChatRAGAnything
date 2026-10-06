@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Operations</p>
+  <h1>Command Center</h1>
+  <p>Action-first view of fleet health, current demand, and incidents that need attention.</p>
+</section>
+
+<section class="operations-status panel" data-system-status="{{ system_status }}">
+  <div>
+    <span class="status-kicker">System status</span>
+    <strong class="system-status system-status-{{ system_status|lower }}">{{ system_status }}</strong>
+  </div>
+  <a class="action-btn" href="/incidents?status=open">View incidents</a>
+</section>
+
+<section class="grid operations-summary" aria-label="Operations summary">
+  <article class="panel"><h2>Bots</h2><p><strong>{{ bots_total }}</strong> total · {{ bots_active }} active · {{ bots_paused }} paused</p></article>
+  <article class="panel"><h2>Channel evidence</h2><p><strong>{{ channels_ready }}</strong> ready of {{ channels_total }}</p></article>
+  <article class="panel"><h2>Knowledge Services</h2><p><strong>{{ knowledge_healthy }}</strong> healthy of {{ knowledge_total }}</p></article>
+  <article class="panel"><h2>Today's conversations</h2><p><strong>{{ today_conversations }}</strong></p></article>
+  <article class="panel"><h2>Human queue</h2><p><strong>{{ human_queue_count }}</strong> waiting</p></article>
+  <article class="panel"><h2>Open incidents</h2><p><strong>{{ open_incident_count }}</strong></p></article>
+</section>
+
+<section class="operations-section" aria-label="Channel evidence details">
+  <div class="section-heading"><h2>Channel evidence</h2></div>
+  <div class="grid">
+    {% for channel in channel_cards %}
+    <article class="panel">
+      <h3>{{ channel.display_name }}</h3>
+      <p>{{ "Configured" if channel.configured else "Needs configuration" }} · {{ channel.state|replace('_', ' ')|title }}</p>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="operations-section" aria-labelledby="needs-attention-title">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Action first</p>
+      <h2 id="needs-attention-title">Needs Attention</h2>
+    </div>
+  </div>
+  {% if attention %}
+  <div class="attention-list">
+    {% for row in attention %}
+    <article class="panel attention-card severity-{{ row.incident.severity }}" data-incident-id="{{ row.incident.id }}">
+      <div class="attention-card-head">
+        <span class="severity-badge severity-{{ row.incident.severity }}">{{ row.incident.severity|title }}</span>
+        <span>{{ row.incident.source_type|replace('_', ' ')|title }}</span>
+      </div>
+      <h3>{{ row.incident.incident_type|replace('_', ' ')|title }}</h3>
+      <p>{{ row.incident.source_type }}/{{ row.incident.source_id }}</p>
+      {% if row.affected_bots %}
+      <p class="affected-bots"><strong>Affected Bots:</strong>
+        {% for bot in row.affected_bots %}{{ bot.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+      </p>
+      {% endif %}
+      <div class="panel-actions">
+        <a class="action-btn" href="/incidents/{{ row.incident.id }}">View incident</a>
+        <a class="action-btn" href="{{ row.source_url }}">{{ row.source_label }}</a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <article class="panel"><h3>No active incidents</h3><p>No current incident requires action.</p></article>
+  {% endif %}
+</section>
+
+<section class="operations-section">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Fleet</p>
+      <h2>Bot status</h2>
+    </div>
+    <a class="action-btn" href="/bots">Manage Bots</a>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Bot</th><th>Lifecycle</th><th>Active incidents</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for row in fleet %}
+        <tr>
+          <td>{{ row.bot.name }}</td>
+          <td>{{ row.bot.lifecycle_status|title }}</td>
+          <td>{{ row.incident_count }}</td>
+          <td class="actions">
+            <a class="action-btn" href="/bots/{{ row.bot.id }}">Overview</a>
+            <a class="action-btn" href="/analytics?bot_id={{ row.bot.id }}">Analytics</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

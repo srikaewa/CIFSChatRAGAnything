@@ -10,10 +10,12 @@
     <aside class="sidebar">
       <div class="brand"><img src="/static/CIFS_logo.png" alt="CIFS" class="brand-logo">Chatbot Manager</div>
       <nav aria-label="Primary navigation">
-        <a href="/" class="{{ 'active' if active_page == 'dashboard' else '' }}" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+        <a href="/" class="{{ 'active' if active_page == 'command_center' else '' }}" {% if active_page == 'command_center' %}aria-current="page"{% endif %}>Command Center</a>
         <a href="/bots" class="{{ 'active' if active_page in ['bots', 'channels', 'rules', 'assistant', 'test_chat'] else '' }}" {% if active_page in ['bots', 'channels', 'rules', 'assistant', 'test_chat'] %}aria-current="page"{% endif %}>Bots</a>
         <a href="/conversations" class="{{ 'active' if active_page in ['conversations', 'logs'] else '' }}" {% if active_page in ['conversations', 'logs'] %}aria-current="page"{% endif %}>Conversations</a>
         <a href="/knowledge-services" class="{{ 'active' if active_page == 'knowledge_services' else '' }}" {% if active_page == 'knowledge_services' %}aria-current="page"{% endif %}>Knowledge Services</a>
+        <a href="/analytics" class="{{ 'active' if active_page == 'analytics' else '' }}" {% if active_page == 'analytics' %}aria-current="page"{% endif %}>Analytics</a>
+        <a href="/incidents" class="{{ 'active' if active_page == 'incidents' else '' }}" {% if active_page == 'incidents' %}aria-current="page"{% endif %}>Incidents</a>
       </nav>
     </aside>
     <main class="main">

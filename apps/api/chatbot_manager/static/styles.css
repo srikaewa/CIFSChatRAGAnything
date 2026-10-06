@@ -1054,3 +1054,171 @@ textarea {
 .status-bot_active { background:oklch(.94 .04 145); }
 @media (max-width:1100px) { .inbox-filters { grid-template-columns:repeat(2,minmax(160px,1fr)); } }
 @media (max-width:820px) { .conversation-layout, .inbox-filters { grid-template-columns:1fr; } .message-card { max-width:100%; } }
+
+/* Phase 5 operations surfaces */
+.operations-status,
+.section-heading,
+.attention-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.operations-status {
+  margin-bottom: 16px;
+}
+
+.status-kicker,
+.eyebrow {
+  display: block;
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.system-status {
+  display: block;
+  font-size: 1.5rem;
+}
+
+.system-status-critical,
+.severity-critical {
+  color: var(--error-fg);
+}
+
+.system-status-degraded,
+.severity-warning {
+  color: oklch(0.48 0.13 75);
+}
+
+.system-status-healthy {
+  color: oklch(0.42 0.13 145);
+}
+
+.operations-summary {
+  margin-bottom: 28px;
+}
+
+.operations-summary .panel strong,
+.metric-value {
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+
+.operations-section {
+  margin-top: 28px;
+}
+
+.section-heading {
+  margin-bottom: 12px;
+}
+
+.section-heading h2,
+.attention-card h3 {
+  margin: 0;
+}
+
+.attention-list {
+  display: grid;
+  gap: 12px;
+}
+
+.attention-card {
+  border-left: 4px solid var(--line);
+}
+
+.attention-card.severity-critical {
+  border-left-color: var(--danger-bg);
+}
+
+.attention-card.severity-warning {
+  border-left-color: oklch(0.66 0.14 75);
+}
+
+.severity-badge {
+  display: inline-block;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.affected-bots {
+  margin-top: 8px !important;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.operations-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.operations-filters label {
+  display: grid;
+  gap: 6px;
+  min-width: 170px;
+  color: var(--muted);
+}
+
+.operations-filters button {
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 16px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+.incident-timeline {
+  margin: 0;
+}
+
+.incident-timeline div {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.incident-timeline dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.incident-timeline dd {
+  margin: 0;
+}
+
+.compact-health-grid {
+  margin-top: 12px;
+}
+
+.compact-health-grid > div {
+  display: grid;
+  gap: 4px;
+}
+
+@media (max-width: 760px) {
+  .operations-status,
+  .section-heading,
+  .attention-card-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .operations-filters {
+    display: grid;
+  }
+}

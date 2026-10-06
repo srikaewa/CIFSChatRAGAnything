@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Operations</p>
+  <h1>Analytics</h1>
+  <p>Operational and quality metrics with direct drill-down to the underlying conversations.</p>
+</section>
+
+<form class="panel operations-filters" method="get" action="/analytics">
+  <label>Bot
+    <select name="bot_id">
+      <option value="">All Bots</option>
+      {% for bot in bots %}
+      <option value="{{ bot.id }}" {{ "selected" if selected_bot_id == bot.id else "" }}>{{ bot.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>From
+    <input type="datetime-local" name="from" value="{{ start.isoformat(timespec='seconds') }}">
+  </label>
+  <label>To
+    <input type="datetime-local" name="to" value="{{ end.isoformat(timespec='seconds') }}">
+  </label>
+  <button type="submit">Apply</button>
+</form>
+
+<section class="operations-section" aria-labelledby="operations-title">
+  <div class="section-heading"><h2 id="operations-title">Operations</h2></div>
+  <div class="grid metric-grid">
+    {% for key, metric in summary.operations.items() %}
+    <article class="panel metric-card">
+      <h3>{{ operations_labels[key] }}</h3>
+      <p class="metric-value">{{ metric.value }}</p>
+      <a class="action-btn" href="{{ metric.drilldown_url }}">View conversations</a>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="operations-section" aria-labelledby="quality-title">
+  <div class="section-heading"><h2 id="quality-title">Quality</h2></div>
+  <div class="grid metric-grid">
+    {% for key, metric in summary.quality.items() %}
+    <article class="panel metric-card">
+      <h3>{{ quality_labels[key] }}</h3>
+      <p class="metric-value">{{ metric.value }}</p>
+      <a class="action-btn" href="{{ metric.drilldown_url }}">View conversations</a>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

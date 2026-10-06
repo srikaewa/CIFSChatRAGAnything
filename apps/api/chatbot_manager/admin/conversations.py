@@ -119,6 +119,9 @@ def conversations_page(
     bot_id: int | None = Query(default=None),
     channel: str = Query(default=""),
     status: str = Query(default=""),
+    decision: str = Query(default=""),
+    from_at: datetime | None = Query(default=None, alias="from"),
+    to_at: datetime | None = Query(default=None, alias="to"),
     assigned: str = Query(default=""),
     q: str = Query(default=""),
     admin_email: str = Depends(require_admin),
@@ -132,6 +135,37 @@ def conversations_page(
         statement = statement.where(Conversation.bot_id == bot_id)
     if status:
         statement = statement.where(Conversation.status == status)
+
+    decision_filter = decision.strip().lower()
+    if decision_filter:
+        decision_statement = select(ConversationMessage.conversation_id).join(
+            BotDecision,
+            BotDecision.message_id == ConversationMessage.id,
+        )
+        if decision_filter == "knowledge_error":
+            decision_statement = decision_statement.where(
+                BotDecision.error_code.like("knowledge_%")
+            )
+        else:
+            decision_statement = decision_statement.where(
+                BotDecision.decision_type == decision_filter
+            )
+        if from_at is not None:
+            decision_statement = decision_statement.where(
+                BotDecision.created_at >= from_at
+            )
+        if to_at is not None:
+            decision_statement = decision_statement.where(
+                BotDecision.created_at <= to_at
+            )
+        conversation_ids = list(session.exec(decision_statement).all())
+        statement = statement.where(Conversation.id.in_(conversation_ids))
+    else:
+        if from_at is not None:
+            statement = statement.where(Conversation.started_at >= from_at)
+        if to_at is not None:
+            statement = statement.where(Conversation.started_at <= to_at)
+
     if assigned == "me":
         statement = statement.where(Conversation.assigned_operator_id == TEMP_OPERATOR_ID)
     elif assigned == "unassigned":
@@ -194,6 +228,9 @@ def conversations_page(
                 "bot_id": bot_id or "",
                 "channel": channel,
                 "status": status,
+                "decision": decision,
+                "from": from_at.isoformat() if from_at is not None else "",
+                "to": to_at.isoformat() if to_at is not None else "",
                 "assigned": assigned,
                 "q": q,
             },

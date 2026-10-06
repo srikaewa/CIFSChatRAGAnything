@@ -1,3 +1,5 @@
+import json
+from datetime import datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
@@ -25,6 +27,8 @@ from chatbot_manager.models import (
     BotConfigRule,
     BotConfigVersion,
     ChannelConnection,
+    Conversation,
+    Incident,
     KnowledgeService,
     utc_now,
 )
@@ -100,6 +104,55 @@ def _workspace_context(
         "workspace_channel_check": channel_check,
         "readiness": readiness,
         "active_workspace_tab": active_workspace_tab,
+    }
+
+
+def _bot_operations_context(session: Session, bot: Bot) -> dict[str, object]:
+    channels = list(
+        session.exec(
+            select(ChannelConnection).where(ChannelConnection.bot_id == bot.id)
+        ).all()
+    )
+    live, _draft = _configs(session, bot)
+    live_service = _service_for_config(session, live)
+
+    active_incidents: list[Incident] = []
+    for incident in session.exec(
+        select(Incident).where(Incident.status.in_(("open", "acknowledged")))
+    ).all():
+        try:
+            affected = json.loads(incident.affected_bot_ids_json)
+        except (json.JSONDecodeError, TypeError):
+            affected = []
+        if isinstance(affected, list) and bot.id in affected:
+            active_incidents.append(incident)
+
+    now = utc_now()
+    today_start = datetime(now.year, now.month, now.day)
+    activity_today = len(
+        session.exec(
+            select(Conversation).where(
+                Conversation.bot_id == bot.id,
+                Conversation.started_at >= today_start,
+            )
+        ).all()
+    )
+    if any(row.severity == "critical" for row in active_incidents):
+        operational_status = "Critical"
+    elif active_incidents:
+        operational_status = "Degraded"
+    else:
+        operational_status = "No active incidents"
+
+    return {
+        "operational_status": operational_status,
+        "operational_incident_count": len(active_incidents),
+        "operational_channels_total": len(channels),
+        "operational_channels_ready": sum(
+            row.enabled and row.status == "ready" for row in channels
+        ),
+        "operational_knowledge_service": live_service,
+        "operational_activity_today": activity_today,
     }
 
 
@@ -200,6 +253,7 @@ def bot_overview(
 ) -> Response:
     bot = _get_bot(session, bot_id)
     context = _workspace_context(session, bot, active_workspace_tab="overview")
+    context.update(_bot_operations_context(session, bot))
     context.update(
         {
             "admin_email": admin_email,

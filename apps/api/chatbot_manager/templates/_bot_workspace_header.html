@@ -19,5 +19,6 @@
   <a href="/bots/{{ bot.id }}/channels" class="{{ 'active' if active_workspace_tab == 'channels' else '' }}">Channels</a>
   <a href="/bots/{{ bot.id }}/test" class="{{ 'active' if active_workspace_tab == 'test' else '' }}">Test</a>
   <a href="/conversations?bot_id={{ bot.id }}">Conversations</a>
+  <a href="/analytics?bot_id={{ bot.id }}">Analytics</a>
   <a href="/bots/{{ bot.id }}/versions" class="{{ 'active' if active_workspace_tab == 'versions' else '' }}">Versions</a>
 </nav>

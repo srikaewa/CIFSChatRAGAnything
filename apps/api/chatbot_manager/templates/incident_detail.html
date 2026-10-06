@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow"><a href="/incidents">Incidents</a></p>
+  <h1>{{ incident.incident_type|replace('_', ' ')|title }}</h1>
+  <p>{{ incident.source_type }}/{{ incident.source_id }}</p>
+</section>
+
+<section class="grid">
+  <article class="panel">
+    <h2>Status</h2>
+    <p><span class="severity-badge severity-{{ incident.severity }}">{{ incident.severity|title }}</span> · {{ incident.status|title }}</p>
+    {% if incident.status == "open" %}
+    <form method="post" action="/incidents/{{ incident.id }}/acknowledge" class="panel-actions">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <button class="action-btn" type="submit">Acknowledge</button>
+    </form>
+    {% endif %}
+  </article>
+  <article class="panel">
+    <h2>Affected Bots</h2>
+    {% if affected_bots %}
+      {% for bot in affected_bots %}
+      <p><a href="/bots/{{ bot.id }}">{{ bot.name }}</a></p>
+      {% endfor %}
+    {% else %}
+    <p>Global/system incident or no Bot mapping.</p>
+    {% endif %}
+  </article>
+  <article class="panel">
+    <h2>Source</h2>
+    <p>{{ incident.source_type }}/{{ incident.source_id }}</p>
+  </article>
+</section>
+
+<section class="panel operations-section">
+  <h2>Incident timeline</h2>
+  <dl class="incident-timeline">
+    <div><dt>First seen</dt><dd>{{ incident.first_seen_at }}</dd></div>
+    <div><dt>Last seen</dt><dd>{{ incident.last_seen_at }}</dd></div>
+    {% if incident.resolved_at %}
+    <div><dt>Recovered</dt><dd>{{ incident.resolved_at }}</dd></div>
+    {% endif %}
+  </dl>
+</section>
+
+{% if details %}
+<section class="panel operations-section">
+  <h2>Operational details</h2>
+  <dl class="incident-timeline">
+    {% for key, value in details.items() %}
+    <div><dt>{{ key|replace('_', ' ')|title }}</dt><dd>{{ value }}</dd></div>
+    {% endfor %}
+  </dl>
+</section>
+{% endif %}
+{% endblock %}

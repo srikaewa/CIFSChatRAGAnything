@@ -26,6 +26,20 @@
       <option value="closed" {{ "selected" if filters.status == "closed" else "" }}>Closed</option>
     </select>
   </label>
+  <label>Decision
+    <select name="decision">
+      <option value="">All decisions</option>
+      {% for value in ["rule", "rag", "fallback", "escalation", "knowledge_error"] %}
+      <option value="{{ value }}" {{ "selected" if filters.decision == value else "" }}>{{ value|replace('_', ' ')|title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>From
+    <input type="datetime-local" name="from" value="{{ filters.from }}">
+  </label>
+  <label>To
+    <input type="datetime-local" name="to" value="{{ filters.to }}">
+  </label>
   <label>Assigned
     <select name="assigned">
       <option value="">Anyone</option>
