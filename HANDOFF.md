@@ -727,3 +727,26 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --cached --check` -> exit 0.
 - Task 4 implementation commit: `5587e85` — `feat: add owner user administration`.
 - Next Phase 6 task: Task 5 — Add Sanitized Audit Service and Audit UI.
+
+### Task 5 — Add Sanitized Audit Service and Audit UI COMPLETE
+
+- Task 5 started from clean HEAD `4be827d`.
+- RED: `rtk uv run pytest -q tests/test_audit.py` failed during collection because `chatbot_manager.audit` did not yet exist.
+- Added `audit.py` with `sanitize_audit_value()` and `record_audit()`.
+- Sanitization is recursive through dictionaries/lists/tuples and case-folds keys before checking the approved sensitive-key set. Sensitive values become `[REDACTED]`; ordinary opaque strings are not regex-rewritten.
+- `record_audit()` persists actor user ID, action, object type/id, optional Bot ID, summary, sanitized before/after JSON, sanitized request metadata JSON, and timestamp using the existing `AuditEvent` model.
+- Added Owner/Admin `GET /audit` with filters for action, actor email, Bot, from date, and to date. Operators receive `403`. Administration navigation now shows Audit to Owner/Admin and Users only to Owner.
+- Audit UI renders actor email, action, target, summary, timestamp, and sanitized before/after expanders.
+- Instrumented successful existing mutation families: `bot.publish`, `bot.pause`, `bot.resume`; `knowledge.create`, `knowledge.update`, `knowledge.credential_replace`, `knowledge.disable`; `user.create`, `user.update`, `user.password_reset`, `user.bot_access`; `conversation.assign`, `conversation.take`, `conversation.return_to_bot`, `conversation.close`; and `incident.acknowledge`.
+- Conversation audit snapshots contain only IDs/state/assignment transitions; no user message, operator reply, internal-note, or close-reason text is copied into audit rows.
+- Knowledge/user callers never pass raw API keys or passwords into audit snapshots. The sanitizer test separately proves nested `api_key`, mixed-case `Authorization`, and mixed-case `bot_token` values are redacted.
+- Representative integration test exercises real admin routes (with only publish external work faked) and proves required audit actions exist while submitted password/API-key values and conversation external-user identifier are absent from serialized audit JSON.
+- Sequencing note: `bot.archive` does not exist yet. Task 6 introduces archive/retention and must record `bot.archive` there rather than inventing an archive route in Task 5.
+- Audit suite: `rtk uv run pytest -q tests/test_audit.py` -> `6 passed in 1.64s`.
+- Cross-surface focused verification across audit/authorization/users/Bots/Test Center/Knowledge/Conversations/Operations -> `74 passed in 17.96s`.
+- Fresh full suite: `362 passed in 42.47s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 5 implementation commit: `1aab64c` — `feat: add sanitized administrative audit trail`.
+- Next Phase 6 task: Task 6 — Add Archive and Retention Controls.
