@@ -518,3 +518,22 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 1 implementation commit: `7406243` — `feat: add deduplicated incident tracking`.
 - Next Phase 5 task: Task 2 — Runtime and Integration Health Checks.
+
+### Task 2 — Runtime and Integration Health Checks COMPLETE
+
+- Task 2 started from clean HEAD `9b51cae`; fresh baseline: `rtk uv run pytest -q` -> `295 passed in 12.00s`.
+- RED: `rtk uv run pytest -q tests/test_health_service.py` failed during collection because `chatbot_manager.operations.health` did not yet exist.
+- Added `HealthSignal` and `HealthService` with three bounded checks: database runtime health, enabled Knowledge Service health, and channel evidence health.
+- Database health reports `Healthy` only after `SELECT 1` succeeds; failures become `unavailable / critical / database_unavailable` without exception text leakage.
+- Knowledge health probes each enabled service once through the existing client factory and computes affected Bots from Live config bindings. A shared RAG outage yields one root signal containing all affected Bot IDs rather than one signal per Bot.
+- Knowledge statuses are normalized to the Phase 5 operational vocabulary: healthy -> `healthy`; unavailable/unauthorized/invalid -> `unavailable / critical` with stable existing detail codes.
+- Channel health does not invent provider uptime. Disabled connections return `unknown`; not-ready or recorded-error connections return `degraded`; configured connections with only recent activity evidence return `unknown / channel_recent_activity`; otherwise `unknown / channel_configured_no_active_probe`.
+- No new channel schema or provider probe was added because current `ChannelConnection` has no dedicated activity/error columns and the provider adapters expose no reliable active health endpoint. Optional existing `metadata_json` evidence is used when present.
+- Diff review exposed a timezone bug in activity evidence: offset-aware timestamps were being stripped rather than converted to UTC. Added a regression test that failed RED, then normalized aware timestamps to UTC before freshness comparison.
+- First focused GREEN across Health/Knowledge/Channel suites: `18 passed in 0.58s`; final focused suite after timezone correction: `19 passed in 0.63s`.
+- Fresh full suite after the correction: `302 passed in 11.43s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 2 implementation commit: `786b650` — `feat: add system and integration health checks`.
+- Next Phase 5 task: Task 3 — Operational and Quality Metrics.
