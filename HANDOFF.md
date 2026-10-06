@@ -641,3 +641,24 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Plan/spec reconciliation: Task 7's phrase `force warning-only fallback-rate threshold` has no matching approved fallback percentage threshold in the authoritative spec; fallback rate is defined only as a metric. Consistent with Task 5, no percentage threshold was invented. Warning-to-Telegram persistence was validated with the approved human-queue warning incident instead.
 - Phase 5 Operations Monitoring is complete locally. No push, merge, deploy, main-branch modification, or real Telegram delivery was performed.
 - Next plan: `docs/superpowers/plans/2026-09-13-phase-6-multi-user-hardening-cleanup.md` — Phase 6 Multi-User Hardening and Legacy Cleanup.
+
+## Phase 6 — Multi-User Hardening and Legacy Cleanup
+
+### Task 1 — User, Bot Access, and Audit Models COMPLETE
+
+- Task 1 started from clean HEAD `61661b5`; fresh baseline: `rtk uv run pytest -q` -> `331 passed in 23.67s`.
+- Loaded the Phase 6 plan with Superpowers executing-plans and kept the existing linked worktree/branch; no new worktree was created.
+- RED: `rtk uv run pytest -q tests/test_users.py tests/test_audit.py` failed during collection because `User`, `UserBotAccess`, and `AuditEvent` did not yet exist.
+- Added additive SQLModel tables `User`, `UserBotAccess`, and `AuditEvent` in `models.py`.
+- `User.email` is indexed and unique; a duplicate-email regression test verifies the database constraint with `IntegrityError`.
+- `UserBotAccess` persists `user_id` / `bot_id` mappings but intentionally has no composite DB unique constraint in Task 1. The approved plan assigns duplicate enforcement to the later access service to avoid a risky SQLite retrofit constraint.
+- `AuditEvent` persists actor user, action, object type/id, optional Bot, summary, before/after JSON, request metadata JSON, and indexed creation timestamp.
+- These are new tables, so existing SQLite installations receive them through `SQLModel.metadata.create_all()`; no ALTER migration helper was added.
+- No owner bootstrap, password hashing, session-token migration, role validation, authorization service, or audit-writing service was implemented ahead of later Phase 6 tasks.
+- Focused verification: `rtk uv run pytest -q tests/test_users.py tests/test_audit.py` -> `3 passed in 0.43s`.
+- Fresh full suite: `334 passed in 16.80s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 1 implementation commit: `4d2fab2` — `feat: add users bot access and audit models`.
+- Next Phase 6 task: Task 2 — Bootstrap Owner and Replace Environment-Only Authentication.
