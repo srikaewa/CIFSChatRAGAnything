@@ -1,21 +1,39 @@
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from sqlmodel import Session
 
 from .admin import router as admin_router
-from .db import init_db
+from .db import get_engine, init_db
+from .operations.scheduler import OperationsScheduler
 from .settings import get_settings, validate_deployment_settings
 from .webhooks import router as webhook_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    validate_deployment_settings(get_settings())
+    settings = get_settings()
+    validate_deployment_settings(settings)
     init_db()
-    yield
+
+    scheduler_session = Session(get_engine())
+    scheduler = OperationsScheduler(scheduler_session, settings)
+    stop_event = asyncio.Event()
+    task = asyncio.create_task(scheduler.run_forever(stop_event))
+    app.state.operations_scheduler_task = task
+    app.state.operations_scheduler_stop_event = stop_event
+    try:
+        yield
+    finally:
+        stop_event.set()
+        task.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await task
+        scheduler_session.close()
 
 
 def create_app() -> FastAPI:
