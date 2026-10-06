@@ -556,3 +556,24 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 3 implementation commit: `2c95546` — `feat: add chatbot operations metrics`.
 - Next Phase 5 task: Task 4 — Telegram Alert Policy.
+
+### Task 4 — Telegram Alert Policy COMPLETE
+
+- Task 4 started from clean HEAD `d1a9e0e`; fresh baseline: `rtk uv run pytest -q` -> `306 passed in 13.63s`.
+- RED: `rtk uv run pytest -q tests/test_alert_service.py` failed during collection because `chatbot_manager.operations.alerts` did not yet exist.
+- Added `AlertPolicy`, `AlertResult`, and async `TelegramAlertService.notify_incident()`.
+- Policy behavior is explicit: Critical -> immediate Telegram; Warning -> only after `warning_persist_minutes`; Info -> no Telegram; repeated active notifications -> cooldown suppression.
+- Cooldown defaults to 15 minutes as a constructor policy value because the approved Phase 5 settings list does not define a cooldown environment variable.
+- Recovery is schema-free and one-shot: `Incident.external_notified_at` is the timestamp of the last successful external notification. A resolved incident sends recovery only when it was previously externally notified and that timestamp predates `resolved_at`; after successful recovery the timestamp advances to at least `resolved_at`, suppressing subsequent recovery duplicates.
+- Sender reuses the existing `TelegramAdapter` and includes severity/recovery state, incident type/source, affected Bot names, incident start time, and relative route `/incidents/<id>`.
+- Sender does not include incident `details_json` or conversation/message content.
+- Telegram exceptions are caught and mapped to stable `telegram_alert_failed`; failed sends do not update `external_notified_at`, and token-bearing URLs/upstream response bodies are not returned.
+- Added approved Phase 5 settings and `.env.example` keys: `OPS_POLL_SECONDS`, `WARNING_PERSIST_MINUTES`, `HUMAN_WAIT_WARNING_MINUTES`, `HUMAN_WAIT_CRITICAL_MINUTES`, `RAG_LATENCY_WARNING_MS`, `RAG_LATENCY_CRITICAL_MS`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`.
+- Operational Telegram credentials are separate from the existing user-facing `TELEGRAM_BOT_TOKEN`; no implicit fallback/reuse was added.
+- Focused verification: `rtk uv run pytest -q tests/test_alert_service.py tests/test_telegram_channel.py` -> `19 passed in 0.29s`.
+- Fresh full suite: `315 passed in 13.34s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 4 implementation commit: `405ba4b` — `feat: add incident telegram alerts`.
+- Next Phase 5 task: Task 5 — Lightweight Operations Scheduler.
