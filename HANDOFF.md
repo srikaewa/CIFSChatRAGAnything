@@ -662,3 +662,25 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 1 implementation commit: `4d2fab2` — `feat: add users bot access and audit models`.
 - Next Phase 6 task: Task 2 — Bootstrap Owner and Replace Environment-Only Authentication.
+
+### Task 2 — Bootstrap Owner and Replace Environment-Only Authentication COMPLETE
+
+- Task 2 started from clean HEAD `b082b3f`.
+- RED: `rtk uv run pytest -q tests/test_users.py tests/test_session_security.py` failed during collection because `chatbot_manager.auth` and `read_session_user_id` did not yet exist.
+- Added `auth/service.py` using the already-installed `pwdlib` recommended Argon2 hasher.
+- `bootstrap_owner(session)` creates the first persisted active Owner only when the User table is empty, normalizes `ADMIN_EMAIL`, hashes `ADMIN_PASSWORD`, and never stores plaintext credentials. Repeated bootstrap calls return the existing first user without resetting credentials.
+- `authenticate_user()` normalizes email case/whitespace and rejects unknown, wrong-password, and inactive users. `load_active_user()` resolves active persisted sessions by user ID.
+- `init_db()` now bootstraps the first Owner after default Bot creation and legacy channel migration.
+- Session tokens migrated from email payloads to `user_id` using salt `admin-session-v2`; old `admin-session` email tokens are deliberately invalid and require a fresh login.
+- The Task 2 plan's abbreviated file list omitted the live integration points. Minimal required integration was added to `admin/routes.py` and `admin/dependencies.py`: `/login` now authenticates against persisted Users and writes a user-ID token; `require_admin` reads that token, loads an active User, and returns the email string expected by existing routes/templates.
+- This email-returning `require_admin` is intentionally transitional. Task 3 owns the `CurrentUser`/role/Bot-scope authorization refactor.
+- Existing email-bound CSRF tokens remain unchanged in Task 2 so current forms keep working; the session itself is now database-backed and inactive users lose access immediately.
+- Added integration coverage proving a separately persisted `admin` user can log in even though that email/password does not exist in environment settings.
+- Focused verification: `rtk uv run pytest -q tests/test_users.py tests/test_session_security.py` -> `11 passed in 1.14s`.
+- Broader auth/admin verification: `rtk uv run pytest -q tests/test_admin_routes.py tests/test_app_boot.py tests/test_session_security.py tests/test_users.py` -> `43 passed in 6.42s`.
+- Fresh full suite: `338 passed in 34.23s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 2 implementation commit: `6eed6d5` — `feat: add database backed user authentication`.
+- Next Phase 6 task: Task 3 — Enforce Role and Bot-Scope Authorization Server-Side.
