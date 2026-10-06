@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
+from chatbot_manager.auth.authorization import require_legacy_manager
 from chatbot_manager.auth.service import authenticate_user
 from chatbot_manager.channel_config import CHANNEL_DEFINITIONS, channel_cards, channel_credentials, get_channel, save_channel, update_channel_credentials
 from chatbot_manager.bots.service import publish_legacy_default_bot_rules
@@ -23,7 +24,7 @@ from chatbot_manager.security import decrypt_secret, encrypt_secret, make_sessio
 from chatbot_manager.settings import get_settings
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_legacy_manager)])
 SUPPORTED_KNOWLEDGE_EXTENSIONS = {
     ".bmp",
     ".doc",

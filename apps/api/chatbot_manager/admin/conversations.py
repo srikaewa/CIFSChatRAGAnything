@@ -5,7 +5,17 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Res
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
-from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
+from chatbot_manager.admin.dependencies import (
+    require_admin,
+    require_csrf,
+    require_manager_csrf,
+    templates,
+)
+from chatbot_manager.auth.authorization import (
+    CurrentUser,
+    require_conversation_route_authorization,
+    require_current_user,
+)
 from chatbot_manager.db import get_session
 from chatbot_manager.models import (
     Bot,
@@ -22,7 +32,10 @@ from chatbot_manager.runtime.delivery import DeliveryService
 from chatbot_manager.runtime.handoff import ConversationStateError, HandoffService
 
 
-router = APIRouter(prefix="/conversations")
+router = APIRouter(
+    prefix="/conversations",
+    dependencies=[Depends(require_conversation_route_authorization)],
+)
 TEMP_OPERATOR_ID = 0
 STATUS_LABELS = {
     "bot_active": "Bot active",
@@ -125,12 +138,19 @@ def conversations_page(
     assigned: str = Query(default=""),
     q: str = Query(default=""),
     admin_email: str = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
     statement = select(Conversation).order_by(
         Conversation.last_message_at.desc(),
         Conversation.id.desc(),
     )
+    if current_user.role == "operator":
+        if bot_id is not None and bot_id not in current_user.allowed_bot_ids:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        statement = statement.where(
+            Conversation.bot_id.in_(current_user.allowed_bot_ids)
+        )
     if bot_id is not None:
         statement = statement.where(Conversation.bot_id == bot_id)
     if status:
@@ -297,7 +317,7 @@ def conversation_detail(
 def add_message_to_test_suite(
     conversation_id: int,
     message_id: int,
-    admin_email: str = Depends(require_csrf),
+    admin_email: str = Depends(require_manager_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     conversation = _conversation(session, conversation_id)
@@ -341,7 +361,7 @@ def take_conversation(
 @router.post("/{conversation_id}/assign")
 def assign_conversation(
     conversation_id: int,
-    admin_email: str = Depends(require_csrf),
+    admin_email: str = Depends(require_manager_csrf),
     session: Session = Depends(get_session),
 ) -> Response:
     try:

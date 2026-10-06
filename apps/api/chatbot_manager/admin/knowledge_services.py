@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
+from chatbot_manager.auth.authorization import require_role
 from chatbot_manager.credentials import masked_credential, replace_credential, store_credential
 from chatbot_manager.db import get_session
 from chatbot_manager.knowledge.client import KnowledgeQuery, KnowledgeServiceError
@@ -14,7 +15,10 @@ from chatbot_manager.models import KnowledgeService, utc_now
 
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/knowledge-services")
+router = APIRouter(
+    prefix="/knowledge-services",
+    dependencies=[Depends(require_role("owner", "admin"))],
+)
 
 _SAFE_ERROR_CODES = {
     "invalid_knowledge_service_url",

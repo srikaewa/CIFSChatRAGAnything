@@ -7,12 +7,16 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
+from chatbot_manager.auth.authorization import require_role
 from chatbot_manager.db import get_session
 from chatbot_manager.models import Bot, Incident
 from chatbot_manager.operations.incidents import IncidentService
 
 
-router = APIRouter(prefix="/incidents")
+router = APIRouter(
+    prefix="/incidents",
+    dependencies=[Depends(require_role("owner", "admin"))],
+)
 
 
 def _incident(session: Session, incident_id: int) -> Incident:

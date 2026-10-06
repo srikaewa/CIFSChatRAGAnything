@@ -7,6 +7,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
+from chatbot_manager.auth.authorization import (
+    CurrentUser,
+    require_bot_route_authorization,
+    require_current_user,
+)
 from chatbot_manager.channel_config import CHANNEL_DEFINITIONS
 from chatbot_manager.credentials import (
     masked_credential,
@@ -35,7 +40,10 @@ from chatbot_manager.models import (
 from chatbot_manager.testing.readiness import ReadinessResult, ReadinessService
 
 
-router = APIRouter(prefix="/bots")
+router = APIRouter(
+    prefix="/bots",
+    dependencies=[Depends(require_bot_route_authorization)],
+)
 
 
 def _get_bot(session: Session, bot_id: int) -> Bot:
@@ -190,9 +198,13 @@ def _as_rule_input(rule: BotConfigRule) -> RuleInput:
 def bots_page(
     request: Request,
     admin_email: str = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
-    bots = session.exec(select(Bot).order_by(Bot.name)).all()
+    statement = select(Bot).order_by(Bot.name)
+    if current_user.role == "operator":
+        statement = statement.where(Bot.id.in_(current_user.allowed_bot_ids))
+    bots = session.exec(statement).all()
     return templates.TemplateResponse(
         request,
         "bots.html",

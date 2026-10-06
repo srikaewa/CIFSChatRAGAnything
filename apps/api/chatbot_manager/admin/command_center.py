@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, templates
+from chatbot_manager.auth.authorization import require_role
 from chatbot_manager.channel_config import channel_cards
 from chatbot_manager.db import get_session
 from chatbot_manager.settings import get_settings
@@ -21,7 +22,9 @@ from chatbot_manager.models import (
 )
 
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(require_role("owner", "admin"))],
+)
 
 
 def _affected_bot_ids(incident: Incident) -> tuple[int, ...]:

@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, require_csrf, templates
+from chatbot_manager.auth.authorization import require_bot_route_authorization
 from chatbot_manager.bots.versions import (
     PublishBlocked,
     PublishService,
@@ -26,7 +27,10 @@ from chatbot_manager.testing.regression import ExpectedBehavior, RegressionServi
 from .bots import _get_bot, _workspace_context
 
 
-router = APIRouter(prefix="/bots")
+router = APIRouter(
+    prefix="/bots",
+    dependencies=[Depends(require_bot_route_authorization)],
+)
 
 
 def _test_context(
