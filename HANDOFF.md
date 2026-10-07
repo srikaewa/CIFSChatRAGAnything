@@ -750,3 +750,29 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 5 implementation commit: `1aab64c` — `feat: add sanitized administrative audit trail`.
 - Next Phase 6 task: Task 6 — Add Archive and Retention Controls.
+
+### Task 6 — Add Archive and Retention Controls COMPLETE
+
+- Task 6 started from clean HEAD `20aec03`.
+- RED: `rtk uv run pytest -q tests/test_retention.py` failed during collection because `chatbot_manager.retention` did not yet exist.
+- Added `RetentionService`, `RetentionResult`, and stable `RetentionError` codes.
+- `archive_bot()` requires lifecycle `paused`; active/draft/ready/archive attempts fail with `bot_must_be_paused`. Successful archive sets `lifecycle_status="archived"`, disables all associated ChannelConnections, and preserves config versions, conversations, test cases/runs/results, and prior audit rows.
+- Archive now records the Task 5 deferred `bot.archive` audit event with status transition and disabled-channel count only.
+- Added `POST /bots/{id}/archive`; the Bot Lifecycle UI offers Archive only while paused. Direct archive attempts against non-paused Bots return `409`.
+- `remove_knowledge_service()` rejects any Knowledge Service referenced by any `BotConfigVersion`, including historical published/draft versions, with `knowledge_service_in_use`.
+- Added `disable_knowledge_service()` plus `POST /knowledge-services/{id}/disable`; the normal UI offers Disable and preserves the service/credential/history rather than hard deleting it.
+- Closed-conversation purge uses `closed_at` and deletes child `BotDecision` rows by message IDs, then messages and handoff events, then parent conversations in the same transaction. Open/non-closed conversations are never eligible regardless of age.
+- Incident purge removes only resolved incidents older than the threshold using `resolved_at`; open/acknowledged incidents remain.
+- Audit purge removes only audit rows older than its independent threshold and immediately creates one fresh `retention.audit` event containing counts/threshold only.
+- Conversation and incident purges similarly record one count-only audit row; no message, incident detail, or prior audit payload content is copied into retention audit entries.
+- Nonpositive retention windows are rejected with `retention_days_must_be_positive`.
+- Added settings and `.env.example` defaults: `CONVERSATION_RETENTION_DAYS=365`, `INCIDENT_RETENTION_DAYS=730`, `AUDIT_RETENTION_DAYS=1095`.
+- No automatic destructive scheduler was added. Retention purges remain explicit service maintenance operations so policy can be validated before automation.
+- `rtk uv run pytest -q tests/test_retention.py tests/test_audit.py` -> `15 passed in 2.77s`.
+- Wider focused verification across retention/audit/Bot lifecycle/Knowledge Services/authorization/users/app boot -> `65 passed in 16.12s`.
+- Fresh full suite: `371 passed in 49.05s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 6 implementation commit: `de0805b` — `feat: add archive and retention controls`.
+- Next Phase 6 task: Task 7 — Complete Credential and Redaction Hardening.
