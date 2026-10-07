@@ -797,3 +797,33 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 7 implementation commit: `dab4ad0` — `security: harden credential and redaction boundaries`.
 - Next Phase 6 task: Task 8 — Remove Obsolete Single-Assistant and Local-RAG Product Paths.
+
+### Task 8 — Remove Obsolete Single-Assistant and Local-RAG Product Paths COMPLETE
+
+- Task 8 started from clean HEAD `77e429d`.
+- Dependency proof was captured before deletion with the two plan-required repository searches.
+- Classification before deletion:
+  - **Active replacements:** Knowledge Services (`/knowledge-services`), Bot Knowledge (`/bots/{id}/knowledge`), Bot Rules (`/bots/{id}/rules`), modern Conversation/Message/Decision runtime, and Bot-scoped ChannelConnection/Credential flows.
+  - **Obsolete:** global `/assistant`, `/rules`, `/channels`, `/test-chat`, `/logs`, `/knowledge`, `/knowledge-graph`; local knowledge document/graph APIs; `admin/routes.py`; `channel_config.py`; legacy single-assistant `chatbot` engine; in-process `rag/service.py`; local upload/reindex/delete UI; legacy Tailscale Telegram setup helper.
+  - **Migration/history-only and retained:** `AssistantSettings`, `Rule`, `Channel`, `ChatEvent`, and `KnowledgeDocument` model/table data. Full historical transformation/drop safety was not proven, so these tables were not deleted.
+- Final-surface tests were added before cleanup. Initial RED: `4 failed, 1 passed`—legacy routes/APIs still existed, production still imported in-process RAG, and legacy templates remained.
+- Extracted database-backed login/logout to `admin/auth.py`, then removed the old catch-all legacy admin router.
+- Moved provider definitions to `channel_definitions.py`; removed `channel_config.py`. `channel_connections.py` retains only the startup migration decoder needed to transform legacy `Channel` credentials into encrypted common `Credential` rows and `ChannelConnection` records.
+- Removed legacy single-assistant `chatbot` runtime after moving the shared normalization/rule-match helpers into `runtime/engine.py`.
+- Removed the in-process RAG package (`rag/service.py`, `rag/__init__.py`) and all local knowledge upload/reindex/delete/graph routes/templates.
+- Removed global Channels/dashboard/single-assistant templates: `assistant.html`, `channels.html`, `dashboard.html`, `knowledge.html`, `knowledge_graph.html`, `logs.html`, `rules.html`, `test_chat.html`.
+- Production webhooks no longer write compatibility `ChatEvent` rows. Live records are `Conversation`, `ConversationMessage`, and `BotDecision` only. Provider delivery errors remain observable through safe `ConversationMessage.metadata_json.error_code`.
+- Historical `ChatEvent` and `KnowledgeDocument` rows remain untouched for data preservation; no destructive table migration/drop was attempted.
+- Removed unused global environment channel/LLM/RAG configuration fields and corresponding `.env.example` entries. Operations Telegram alert credentials remain separate and active.
+- Removed `raganything` and `python-telegram-bot` only after source searches proved there were no remaining consumers. `uv.lock` resolved package count dropped from 175 to 45.
+- Removed the now-unreachable `admin/telegram_ops.py` and obsolete test-only compatibility helpers.
+- Consolidated provider/webhook tests around final keyed Bot connections and common encrypted `Credential` storage; legacy startup migration coverage remains.
+- Final focused verification across cleanup/auth/webhooks/runtime/migration/redaction/CSRF/alerts/settings -> `51 passed in 6.06s`.
+- Fresh full suite from the exact candidate -> `254 passed in 30.02s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 45 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Final dependency scans: no `raganything`, `python-telegram-bot`, `rag_service_from_assistant`, `RagAnythingService`, `channel_config`, old admin router, old chatbot engine, `process_messages`, or `_notify_admin` production/test consumers remain. Obsolete route decorator scan returned no matches.
+- Broad plan search still matches retained migration/history model names and modern Bot/Knowledge replacement URLs, plus negative cleanup-test assertions; these are intentional.
+- Task 8 implementation commit: `f2da66c` — `refactor: retire legacy single assistant rag paths`.
+- Next Phase 6 task: Task 9 — Final Redesign Verification, Manual Role Check, and Handoff.
