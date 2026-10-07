@@ -31,8 +31,27 @@ class KnowledgeHealth:
     detail_code: str = ""
 
 
+SAFE_KNOWLEDGE_ERROR_CODES = frozenset(
+    {
+        "knowledge_service_error",
+        "knowledge_service_unavailable",
+        "knowledge_service_unauthorized",
+        "knowledge_service_http_error",
+        "knowledge_response_invalid",
+    }
+)
+
+
 class KnowledgeServiceError(RuntimeError):
     """Stable external-knowledge error that never embeds raw upstream payloads."""
+
+    def __init__(self, code: str) -> None:
+        self.code = (
+            code
+            if code in SAFE_KNOWLEDGE_ERROR_CODES
+            else "knowledge_service_error"
+        )
+        super().__init__(self.code)
 
 
 class KnowledgeServiceClient(Protocol):

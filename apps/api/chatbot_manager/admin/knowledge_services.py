@@ -347,9 +347,11 @@ async def test_knowledge_service_retrieval(
             )
         )
     except KnowledgeServiceError as exc:
-        code = str(exc)
-        if code not in _SAFE_ERROR_CODES:
-            code = "knowledge_service_unavailable"
+        code = (
+            exc.code
+            if exc.code in _SAFE_ERROR_CODES
+            else "knowledge_service_unavailable"
+        )
         return _render_registry(request, admin_email, session, error=code)
     except Exception as exc:
         logger.warning(

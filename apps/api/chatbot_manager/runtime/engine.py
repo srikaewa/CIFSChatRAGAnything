@@ -204,14 +204,11 @@ class BotRuntime:
                 )
             )
         except KnowledgeServiceError as exc:
-            code = str(exc)
-            if not code.startswith("knowledge_"):
-                code = "knowledge_service_error"
             return self._knowledge_fallback(
                 request=request,
                 config=config,
                 started=started,
-                error_code=code,
+                error_code=exc.code,
             )
         except (LookupError, ValueError):
             return self._knowledge_fallback(

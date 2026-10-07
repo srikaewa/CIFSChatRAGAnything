@@ -1,11 +1,12 @@
 import json
 
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from chatbot_manager.channel_config import channel_credentials
+from chatbot_manager.channel_connections import resolve_connection_credentials
 from chatbot_manager.db import get_engine
-from chatbot_manager.models import AssistantSettings, Channel
+from chatbot_manager.models import AssistantSettings, Channel, ChannelConnection, Credential
 from chatbot_manager.rag.service import rag_service_from_assistant
 from chatbot_manager.security import decrypt_secret, encrypt_secret
 from chatbot_manager.settings import get_settings
@@ -61,6 +62,42 @@ def test_channel_secrets_are_encrypted_at_rest_and_decrypted_for_use(client: Tes
         assert channel_credentials(session, get_settings(), "line") == {
             "channel_secret": "line-secret-123",
             "channel_access_token": "line-token-456",
+        }
+
+
+def test_bot_channel_secrets_use_common_encrypted_credential_only(
+    client: TestClient,
+) -> None:
+    csrf_token = login(client)
+
+    response = client.post(
+        "/bots/1/channels/line",
+        data={
+            "csrf_token": csrf_token,
+            "enabled": "on",
+            "channel_secret": "active-line-secret",
+            "channel_access_token": "active-line-token",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    with Session(get_engine()) as session:
+        connection = session.exec(
+            select(ChannelConnection)
+            .where(ChannelConnection.bot_id == 1)
+            .where(ChannelConnection.provider == "line")
+        ).one()
+        assert connection.credential_id is not None
+        credential = session.get(Credential, connection.credential_id)
+        assert credential is not None
+        assert "active-line-secret" not in credential.encrypted_payload
+        assert "active-line-token" not in credential.encrypted_payload
+        assert "active-line-secret" not in connection.metadata_json
+        assert "active-line-token" not in connection.metadata_json
+        assert resolve_connection_credentials(session, connection) == {
+            "channel_secret": "active-line-secret",
+            "channel_access_token": "active-line-token",
         }
 
 
