@@ -38,6 +38,7 @@ from chatbot_manager.models import (
     KnowledgeService,
     utc_now,
 )
+from chatbot_manager.retention import RetentionError, RetentionService
 from chatbot_manager.testing.readiness import ReadinessResult, ReadinessService
 
 
@@ -661,6 +662,24 @@ def pause_bot(
         before={"status": "active"},
         after={"status": "paused"},
     )
+    return RedirectResponse(f"/bots/{bot_id}", status_code=303)
+
+
+@router.post("/{bot_id}/archive")
+def archive_bot(
+    bot_id: int,
+    admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
+    session: Session = Depends(get_session),
+) -> Response:
+    del admin_email
+    try:
+        RetentionService(session).archive_bot(
+            bot_id,
+            actor_user_id=current_user.id,
+        )
+    except RetentionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return RedirectResponse(f"/bots/{bot_id}", status_code=303)
 
 

@@ -79,6 +79,12 @@
     </form>
 
     <div class="knowledge-service-actions">
+      {% if service.enabled %}
+      <form method="post" action="/knowledge-services/{{ service.id }}/disable">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <button type="submit" class="action-btn">Disable</button>
+      </form>
+      {% endif %}
       <form method="post" action="/knowledge-services/{{ service.id }}/test">
         <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
         <button type="submit" class="action-btn">Test Connection</button>

@@ -88,6 +88,10 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
       <button class="action-btn" type="submit">Resume Bot</button>
     </form>
+    <form class="inline-form" method="post" action="/bots/{{ bot.id }}/archive">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+      <button class="action-btn" type="submit">Archive Bot</button>
+    </form>
     {% endif %}
   </div>
 </section>

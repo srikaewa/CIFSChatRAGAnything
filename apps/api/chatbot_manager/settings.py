@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     alert_telegram_bot_token: str = ""
     alert_telegram_chat_id: str = ""
 
+    conversation_retention_days: int = 365
+    incident_retention_days: int = 730
+    audit_retention_days: int = 1095
+
     llm_provider: str = "openai_compatible"
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""

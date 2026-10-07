@@ -13,6 +13,7 @@ from chatbot_manager.db import get_session
 from chatbot_manager.knowledge.client import KnowledgeQuery, KnowledgeServiceError
 from chatbot_manager.knowledge.service import build_knowledge_client
 from chatbot_manager.models import KnowledgeService, utc_now
+from chatbot_manager.retention import RetentionError, RetentionService
 
 
 logger = logging.getLogger(__name__)
@@ -264,6 +265,24 @@ def update_knowledge_service(
             before={"enabled": True},
             after={"enabled": False},
         )
+    return RedirectResponse("/knowledge-services?saved=1", status_code=303)
+
+
+@router.post("/{service_id}/disable")
+def disable_knowledge_service(
+    service_id: int,
+    admin_email: str = Depends(require_csrf),
+    current_user: CurrentUser = Depends(require_current_user),
+    session: Session = Depends(get_session),
+) -> Response:
+    del admin_email
+    try:
+        RetentionService(session).disable_knowledge_service(
+            service_id,
+            actor_user_id=current_user.id,
+        )
+    except RetentionError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return RedirectResponse("/knowledge-services?saved=1", status_code=303)
 
 
