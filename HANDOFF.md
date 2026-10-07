@@ -776,3 +776,24 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - `git diff --check` and staged diff check -> exit 0.
 - Task 6 implementation commit: `de0805b` — `feat: add archive and retention controls`.
 - Next Phase 6 task: Task 7 — Complete Credential and Redaction Hardening.
+
+### Task 7 — Complete Credential and Redaction Hardening COMPLETE
+
+- Task 7 started from clean HEAD `42f6422`.
+- Added cross-layer secret sentinel tests first. Initial run across `test_redaction_boundaries.py`, secret encryption, and failure handling -> `1 failed, 10 passed`.
+- The RED exposed a real persistence leak: `BotRuntime` accepted any `KnowledgeServiceError` string beginning with `knowledge_`; a crafted/upstream-derived `knowledge_service_unavailable:<secret>` therefore reached `RuntimeResult.error_code` and durable `BotDecision.error_code` unchanged.
+- `KnowledgeServiceError` now owns a finite `SAFE_KNOWLEDGE_ERROR_CODES` set. Constructor input outside that exact set becomes `knowledge_service_error`; the exception stores the normalized value as `.code` and its string representation is therefore also stable.
+- `BotRuntime` and Knowledge Service retrieval admin now consume `exc.code` rather than using `str(exc)` as external-error control flow.
+- Provider delivery required no production rewrite: `DeliveryService` already logs only provider/connection ID/exception class and returns `provider_delivery_failed`. A real operator-reply test now injects an exception containing `channel-secret-sentinel` and proves the sentinel is absent from rendered conversation HTML, logs, message metadata, and audit rows.
+- LightRAG transport handling also required no rewrite: `httpx.RequestError` was already mapped to stable Knowledge health/query codes. A real Knowledge Service connection test now injects a transport exception containing the configured API-key sentinel and proves it is absent from redirect/page/audit/log surfaces.
+- Active Bot channel credential storage/read was already on the common Credential model. Added regression coverage for `POST /bots/1/channels/line` proving raw secrets are absent from `Credential.encrypted_payload` and `ChannelConnection.metadata_json`, while `resolve_connection_credentials()` returns the decrypted values for runtime use.
+- Added an explicit no-fallback regression: when a legacy `Channel` contains credentials but an active `ChannelConnection` has no `credential_id`, `resolve_connection_credentials()` returns `{}` rather than consulting legacy Channel/environment values.
+- Source boundary check: active Bot runtime/provider webhook/readiness paths call `resolve_connection_credentials()` and Bot-scoped admin uses `read_credential()`. Remaining `channel_credentials()` references are the legacy global `/channels` routes and legacy `_notify_admin` compatibility path only.
+- Deliberate sequencing: those legacy single-assistant compatibility routes are not replatformed immediately before deletion. Task 8 performs dependency proof and removes the obsolete global/single-assistant paths; `channel_config.py` remains only for that compatibility/migration window.
+- Security-focused verification after the fix: `rtk uv run pytest -q tests/test_redaction_boundaries.py tests/test_secret_encryption.py tests/test_failure_handling.py tests/test_knowledge_client.py tests/test_bot_runtime.py tests/test_webhook_security.py` -> `31 passed in 3.55s`.
+- Fresh full suite: `376 passed in 52.27s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 7 implementation commit: `dab4ad0` — `security: harden credential and redaction boundaries`.
+- Next Phase 6 task: Task 8 — Remove Obsolete Single-Assistant and Local-RAG Product Paths.
