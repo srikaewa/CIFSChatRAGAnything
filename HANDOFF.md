@@ -827,3 +827,66 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 - Broad plan search still matches retained migration/history model names and modern Bot/Knowledge replacement URLs, plus negative cleanup-test assertions; these are intentional.
 - Task 8 implementation commit: `f2da66c` — `refactor: retire legacy single assistant rag paths`.
 - Next Phase 6 task: Task 9 — Final Redesign Verification, Manual Role Check, and Handoff.
+
+### Task 9 — Final Redesign Verification, Manual Role Check, and Handoff COMPLETE
+
+- Task 9 started from clean implementation HEAD `80aba5d` with only final documentation changes planned.
+- Final operating documentation was rewritten to describe only the surviving product surface and responsibility split. README/operations no longer instruct admins to use local knowledge upload/reindex/graph, local RAG parser/model settings, CIFS-managed Tailscale/Telegram webhook automation, or local RAG/upload backups.
+- Final product surface:
+  - Command Center: `/`
+  - Bots: `/bots`; Bot workspace includes Setup, Behavior/Rules, Knowledge binding, Channels, Test, Conversations, Analytics, and Versions
+  - Unified Inbox/Handoff: `/conversations`
+  - External Knowledge Service registry/test: `/knowledge-services`
+  - Analytics: `/analytics`
+  - Incidents: `/incidents`
+  - Owner/Admin Audit: `/audit`
+  - Owner-only Users: `/users`
+  - New provider deployments use keyed webhooks: `/webhooks/{provider}/{webhook_key}` (Messenger uses GET for verification and POST for events)
+- Final architecture boundary:
+  - CIFS owns Bot configuration/versioning, channels/credentials, runtime decisions, conversations/handoff, testing/publishing, operations/analytics/incidents, users/roles/audit, archive, and retention.
+  - External LightRAG-compatible services own documents, ingestion/parsing, indexing, vector/graph state, retrieval implementation, WebUI, external model/provider configuration, and their own backup/restore lifecycle.
+- Six-phase redesign lineage/key commits:
+  1. **Phase 1 Bot Foundation:** `64a02eb` models, `c651bd6` Default Bot migration, `d6f0957` Bot routes, `38cea08` Bot workspace UI.
+  2. **Phase 2 External Knowledge Service:** `543bb6d` encrypted credentials, `620ff46` external LightRAG client, `6b9f607` Knowledge Service registry, `f00fbdc` Bot binding, `5cf0277` external-knowledge navigation boundary; completed head feeding Phase 3: `70c1738`.
+  3. **Phase 3 Runtime/Conversations:** `d81b111` ChannelConnections, `7734686` provider identity, `3d0c701` conversations/decisions, `e8bd9c1` BotRuntime, `f85692e` handoff/delivery, `591c317` runtime webhooks, `7baeea7` Unified Inbox, `0b42625` compatibility snapshot fix; completed head `dfa4364`.
+  4. **Phase 4 Draft/Test/Publish:** `3bed305` version lifecycle, `36d2831` regression service, `9848378` readiness, `7b30dbb` publish gate, `81e0c48` Draft/setup UI, `f149c8d` Test/Publish Center, `0a41848` Bot-centric admin surface, `72b7be8` Bot-scoped channel correction; phase handoff `9422808`.
+  5. **Phase 5 Operations Monitoring:** `7406243` incidents, `786b650` health, `2c95546` metrics, `405ba4b` alert policy, `bc0132d` scheduler, `ccaeadf` Command Center/Incidents/Analytics; phase handoff `61661b5`.
+  6. **Phase 6 Multi-User Hardening/Cleanup:** `4d2fab2` user/access/audit models, `6eed6d5` DB auth, `8c09181` role/Bot authorization, `5587e85` Owner user admin, `1aab64c` sanitized audit, `de0805b` archive/retention, `dab4ad0` credential/redaction hardening, `f2da66c` legacy/local-RAG retirement; Task 8 handoff `80aba5d`.
+- External RAG validation in Task 9 used the real CIFS `LightRAGClient` contract against an isolated mocked HTTP endpoint (`/query`, `/health`). No authorized live external-RAG deployment/version is configured in this workspace, so no real external service/version success is claimed. The previously approved deployment floor from Phase 2 remains LightRAG `>=1.5.5`; production must record the exact deployed external RAG version during real smoke validation.
+- Prescribed focused security/role verification: `48 passed in 9.52s`, 0 failures; no warnings were printed.
+- Explicit isolated three-user HTTP authorization checkpoint:
+  - **Owner:** `/`, `/users`, `/audit`, `/bots`, `/conversations`, `/knowledge-services`, `/analytics`, `/incidents` all returned 200.
+  - **Admin:** Bots, Knowledge Services, Analytics, Incidents, and Audit returned 200; `/users` returned 403.
+  - **Operator assigned Bot A:** assigned Bot/conversation/Analytics returned 200; Bot B direct URL, Bot B Analytics, global Analytics, Knowledge Services, Incidents, and publish returned 403.
+- Explicit isolated end-to-end checkpoint PASS using real CIFS routes/runtime/persistence/publish/scheduler and mocked only external HTTP boundaries:
+  - provider LINE message -> BotRuntime -> LightRAGClient -> grounded provider reply: PASS, 2 RAG queries across initial/resumed runtime.
+  - escalation -> Needs Human -> Operator Take -> `human_active`: PASS.
+  - inbound while human-active persisted with zero Bot reply: PASS.
+  - operator human reply used LINE push delivery -> Return to Bot -> next inbound resumed Bot/RAG: PASS.
+  - Draft edit -> saved regression -> PublishService -> Live pointer switched -> next provider message used the new Live rule and returned `Published v2`: PASS.
+  - simulated external Knowledge health failure -> one critical `knowledge_service_unavailable` incident -> alert policy eligible -> recovery health -> same incident resolved -> recovery alert eligible: PASS.
+- Fresh full suite after final docs update: `254 passed in 29.59s`, 0 failures; no warnings were printed.
+- Compile verification: `rtk uv run python -m compileall -q apps/api` -> exit 0. The plan's literal `rtk python -m compileall ...` wrapper form is unsupported in this workspace and returned exit 127; the project-supported uv-run Python equivalent passed.
+- `rtk uv lock --check` -> exit 0, `Resolved 45 packages`.
+- `git diff --check` -> exit 0.
+- Final scans:
+  - legacy-type search matches only retained migration/history `AssistantSettings` / `KnowledgeDocument` models, migration code, their preservation tests, and negative cleanup-test assertions; no active local-RAG runtime dependency remains.
+  - `raganything` search across apps/tests/pyproject returned no matches.
+  - secret-name search matched structured credential fields, encrypted credential consumers, password inputs, provider adapters, operations alert settings, and the audit redaction list. A logger-specific secret-name scan returned no matches; no hard-coded production secret or unsafe secret logging was found.
+- Retention/archive defaults and behavior:
+  - closed conversations: 365 days
+  - resolved incidents: 730 days
+  - audit: 1095 days
+  - purges remain explicit maintenance actions, not an automatic destructive scheduler
+  - archive requires a paused Bot, disables its ChannelConnections, and preserves versions/conversations/tests/audit history
+- Backup responsibility:
+  - CIFS: SQLite database, deployment secrets, public-routing/reverse-proxy configuration, and the deployed CIFS revision.
+  - External RAG: document sources, index/vector/graph state, external service/model/provider configuration, credentials, and external RAG version.
+- Remaining non-goals/deferred production checks:
+  - no real provider message was sent in Task 9;
+  - no real external-RAG endpoint/version was available;
+  - no real Telegram operations alert was sent;
+  - no production backup/restore rehearsal was performed;
+  - no push, PR, merge, deploy, or `main` modification was performed.
+- Git state before the final Task 9 docs commit: only `README.md`, `docs/operations.md`, and this `HANDOFF.md` are intentional changes. The feature branch has no upstream tracking ref. Compared with `origin/main`, the pre-final-docs HEAD is **0 behind / 65 ahead**; the final docs commit will advance the ahead count by one.
+- Exact next operational action: configure an authorized external LightRAG deployment (record exact version, meeting the approved floor), public HTTPS routing and provider keyed webhook URLs; then execute the production smoke checklist (real provider inbound/reply, real RAG retrieval, handoff/return, Draft publish, controlled incident/recovery, and CIFS/external-RAG backup/restore rehearsal). After that evidence is recorded, explicitly decide whether to push/open a PR/merge this local feature branch.
