@@ -109,17 +109,3 @@ def require_conversation_route_authorization(
         raise HTTPException(status_code=404, detail="Conversation not found")
     require_bot_access(conversation.bot_id, current_user, session)
     return current_user
-
-
-def require_legacy_manager(
-    request: Request,
-    session: Session = Depends(get_session),
-) -> CurrentUser | None:
-    if request.url.path == "/login":
-        return None
-    current_user = require_current_user(request, session)
-    if request.url.path == "/logout":
-        return current_user
-    if current_user.role not in MANAGER_ROLES:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return current_user

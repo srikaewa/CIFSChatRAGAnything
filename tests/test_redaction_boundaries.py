@@ -7,7 +7,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from chatbot_manager.channel_config import save_channel
 from chatbot_manager.channel_connections import resolve_connection_credentials
 from chatbot_manager.channels.line import LineAdapter
 from chatbot_manager.credentials import store_credential
@@ -18,6 +17,7 @@ from chatbot_manager.models import (
     Bot,
     BotConfigVersion,
     BotDecision,
+    Channel,
     ChannelConnection,
     Conversation,
     ConversationMessage,
@@ -139,15 +139,21 @@ def prepare_runtime(session: Session):
 
 def test_active_connection_credentials_never_fall_back_to_legacy_channel(client) -> None:
     with Session(get_engine()) as session:
-        save_channel(
-            session,
-            "line",
-            True,
-            {
-                "channel_secret": "legacy-channel-secret",
-                "channel_access_token": "legacy-channel-token",
-            },
+        session.add(
+            Channel(
+                provider="line",
+                enabled=True,
+                display_name="LINE",
+                status="ready",
+                credential_json=json.dumps(
+                    {
+                        "channel_secret": "legacy-channel-secret",
+                        "channel_access_token": "legacy-channel-token",
+                    }
+                ),
+            )
         )
+        session.commit()
         bot = session.exec(select(Bot).where(Bot.name == "Default Bot")).one()
         connection = ChannelConnection(
             bot_id=bot.id,

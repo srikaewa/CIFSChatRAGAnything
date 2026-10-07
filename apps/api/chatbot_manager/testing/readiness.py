@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from sqlmodel import Session, select
 
-from chatbot_manager.channel_config import CHANNEL_DEFINITIONS
+from chatbot_manager.channel_definitions import CHANNEL_DEFINITIONS
 from chatbot_manager.channel_connections import resolve_connection_credentials
 from chatbot_manager.models import (
     Bot,

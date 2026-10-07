@@ -1,15 +1,11 @@
 import json
-import logging
-import re
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 from sqlmodel import Session, select
 
-from chatbot_manager.channel_config import CHANNEL_DEFINITIONS, channel_credentials
+from chatbot_manager.channel_definitions import CHANNEL_DEFINITIONS
 from chatbot_manager.channel_connections import (
     migrate_legacy_channels,
     resolve_connection_credentials,
@@ -17,26 +13,14 @@ from chatbot_manager.channel_connections import (
 from chatbot_manager.channels.line import IncomingMessage, LineAdapter
 from chatbot_manager.channels.messenger import MessengerAdapter
 from chatbot_manager.channels.telegram import TelegramAdapter
-from chatbot_manager.chatbot.engine import ChatbotEngine, ChatbotInput, RESPONSE_GENERATION_FAILED
 from chatbot_manager.db import get_session
-from chatbot_manager.models import (
-    AssistantSettings,
-    ChannelConnection,
-    ChatEvent,
-    ConversationMessage,
-    Rule,
-    utc_now,
-)
-from chatbot_manager.rag.service import rag_service_from_assistant
+from chatbot_manager.models import ChannelConnection, ConversationMessage, utc_now
 from chatbot_manager.runtime.conversations import ConversationService
 from chatbot_manager.runtime.delivery import DeliveryService
 from chatbot_manager.runtime.engine import BotRuntime, RuntimeRequest
 from chatbot_manager.runtime.handoff import ConversationStateError, HandoffService
-from chatbot_manager.settings import get_settings
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks")
-Sender = Callable[[dict[str, Any], str], Awaitable[None]]
 
 
 async def _json_payload(request: Request) -> dict[str, Any]:
@@ -47,131 +31,6 @@ async def _json_payload(request: Request) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Malformed JSON payload")
     return payload
-
-
-def get_assistant_settings(session: Session) -> AssistantSettings:
-    settings = session.get(AssistantSettings, 1)
-    if settings is None:
-        settings = AssistantSettings()
-        session.add(settings)
-        session.commit()
-        session.refresh(settings)
-    return settings
-
-
-@dataclass(frozen=True)
-class AdminNotificationResult:
-    status: str
-    error_code: str = ""
-
-
-async def _notify_admin(
-    settings: Any, session: Session, message: IncomingMessage, rule_reply: str
-) -> AdminNotificationResult:
-    """Legacy admin notification path retained until the Unified Inbox replaces it."""
-    chat_id = str(getattr(settings, "admin_notify_chat_id", "") or "").strip()
-    if not chat_id:
-        return AdminNotificationResult(status="skipped")
-    channel = str(getattr(settings, "admin_notify_channel", "telegram") or "").strip().lower()
-    if channel != "telegram":
-        return AdminNotificationResult(status="failed", error_code="admin_notification_unsupported_channel")
-    if re.fullmatch(r"-?\d+", chat_id) is None:
-        return AdminNotificationResult(status="failed", error_code="admin_notification_invalid_destination")
-    app_settings = get_settings()
-    creds = channel_credentials(session, app_settings, "telegram")
-    bot_token = creds.get("bot_token", "")
-    if not bot_token:
-        return AdminNotificationResult(status="failed", error_code="admin_notification_not_configured")
-    adapter = TelegramAdapter(bot_token, "")
-    text = (
-        f"Need human help\n"
-        f"Channel: {message.provider}\n"
-        f"User: {message.external_user_id}\n"
-        f"Message: {message.text}\n"
-        f"Rule: {rule_reply}"
-    )
-    try:
-        await adapter.send_reply({"chat_id": int(chat_id)}, text)
-    except Exception as exc:
-        logger.error(
-            "Admin notification failed provider=%s error_type=%s",
-            message.provider,
-            type(exc).__name__,
-        )
-        return AdminNotificationResult(status="failed", error_code="admin_notification_failed")
-    return AdminNotificationResult(status="sent")
-
-
-def append_event_error(current: str, code: str) -> str:
-    return ";".join(part for part in (current, code) if part)
-
-
-async def process_messages(messages: list[IncomingMessage], sender: Sender, session: Session) -> int:
-    """Legacy single-assistant helper retained for compatibility tests until Phase 6 cleanup.
-
-    Production provider routes below no longer call this function.
-    """
-    rules = list(session.exec(select(Rule).order_by(Rule.priority)).all())
-    settings = get_assistant_settings(session)
-    engine = ChatbotEngine(rag_service=rag_service_from_assistant(settings))
-    processed = 0
-    for message in messages:
-        decision = await engine.answer(
-            ChatbotInput(text=message.text, provider=message.provider, external_user_id=message.external_user_id),
-            rules=rules,
-            settings=settings,
-        )
-        event = ChatEvent(
-            provider=message.provider,
-            external_user_id=message.external_user_id,
-            incoming_text=message.text,
-            decision_source=decision.source,
-            reply_text=decision.reply_text,
-            error=RESPONSE_GENERATION_FAILED if decision.error else "",
-            raw_event=json.dumps(message.raw_event, ensure_ascii=False),
-        )
-        session.add(event)
-        session.commit()
-        session.refresh(event)
-
-        try:
-            await sender(message.reply_context, decision.reply_text)
-        except Exception as exc:
-            logger.error(
-                "Provider reply failed provider=%s error_type=%s",
-                message.provider,
-                type(exc).__name__,
-            )
-            event.error = append_event_error(event.error, "reply_send_failed")
-            session.add(event)
-            session.commit()
-            processed += 1
-            continue
-
-        if decision.escalate:
-            try:
-                notification = await _notify_admin(settings, session, message, decision.rule_reply)
-            except Exception as exc:
-                logger.error(
-                    "Admin notification failed provider=%s error_type=%s",
-                    message.provider,
-                    type(exc).__name__,
-                )
-                notification = AdminNotificationResult(
-                    status="failed", error_code="admin_notification_failed"
-                )
-            logger.info(
-                "Admin notification status provider=%s status=%s",
-                message.provider,
-                notification.status,
-            )
-            if notification.error_code:
-                event.error = append_event_error(event.error, notification.error_code)
-
-        session.add(event)
-        session.commit()
-        processed += 1
-    return processed
 
 
 def _legacy_connection(session: Session, provider: str) -> ChannelConnection:
@@ -245,30 +104,6 @@ def _adapter_for_connection(session: Session, connection: ChannelConnection):
     raise HTTPException(status_code=404, detail="unsupported_channel_provider")
 
 
-def _compat_event(
-    session: Session,
-    *,
-    connection: ChannelConnection,
-    message: IncomingMessage,
-    decision_source: str,
-    reply_text: str,
-    error: str = "",
-) -> None:
-    session.add(
-        ChatEvent(
-            provider=message.provider,
-            external_user_id=message.external_user_id,
-            incoming_text=message.text,
-            decision_source=decision_source,
-            reply_text=reply_text,
-            raw_event=json.dumps(message.raw_event, ensure_ascii=False),
-            error=error,
-            bot_id=connection.bot_id,
-        )
-    )
-    session.commit()
-
-
 async def process_runtime_messages(
     messages: list[IncomingMessage],
     connection: ChannelConnection,
@@ -312,13 +147,6 @@ async def process_runtime_messages(
 
         session.refresh(conversation)
         if conversation.status == "human_active":
-            _compat_event(
-                session,
-                connection=connection,
-                message=message,
-                decision_source="human_active",
-                reply_text="",
-            )
             processed += 1
             continue
 
@@ -362,7 +190,6 @@ async def process_runtime_messages(
             except ConversationStateError:
                 session.refresh(conversation)
 
-        delivery_error = ""
         if result.reply_text:
             delivery_result = await delivery.send(
                 connection,
@@ -370,21 +197,14 @@ async def process_runtime_messages(
                 result.reply_text,
             )
             outbound.delivery_status = delivery_result.status
-            delivery_error = delivery_result.error_code
+            if delivery_result.error_code:
+                metadata = json.loads(outbound.metadata_json)
+                metadata["error_code"] = delivery_result.error_code
+                outbound.metadata_json = json.dumps(metadata, sort_keys=True)
         else:
             outbound.delivery_status = "skipped"
         session.add(outbound)
         session.commit()
-
-        error = append_event_error(result.error_code, delivery_error)
-        _compat_event(
-            session,
-            connection=connection,
-            message=message,
-            decision_source=result.decision_type,
-            reply_text=result.reply_text,
-            error=error,
-        )
         processed += 1
 
     return processed

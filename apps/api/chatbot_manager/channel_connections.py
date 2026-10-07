@@ -3,9 +3,10 @@ from uuid import uuid4
 
 from sqlmodel import Session, select
 
-from chatbot_manager.channel_config import decode_credentials
 from chatbot_manager.credentials import read_credential, store_credential
 from chatbot_manager.models import Bot, Channel, ChannelConnection
+from chatbot_manager.security import decrypt_secret
+from chatbot_manager.settings import get_settings
 
 
 def get_channel_connection(session: Session, connection_id: int) -> ChannelConnection:
@@ -30,6 +31,21 @@ def _metadata(connection: ChannelConnection) -> dict[str, object]:
     return loaded if isinstance(loaded, dict) else {}
 
 
+def _decode_legacy_credentials(channel: Channel) -> dict[str, str]:
+    try:
+        raw = json.loads(channel.credential_json)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    key = get_settings().app_encryption_key
+    return {
+        str(field): decrypt_secret(str(value), key)
+        for field, value in raw.items()
+        if value is not None
+    }
+
+
 def _connection_for_legacy_id(
     session: Session,
     legacy_channel_id: int,
@@ -49,7 +65,7 @@ def migrate_legacy_channels(session: Session) -> None:
         if legacy.id is None or _connection_for_legacy_id(session, legacy.id) is not None:
             continue
 
-        credentials = decode_credentials(legacy)
+        credentials = _decode_legacy_credentials(legacy)
         credential_id = None
         if credentials:
             credential = store_credential(
@@ -71,17 +87,3 @@ def migrate_legacy_channels(session: Session) -> None:
         )
         session.add(connection)
         session.commit()
-
-
-def legacy_default_connection(
-    session: Session,
-    provider: str,
-) -> ChannelConnection | None:
-    default_bot = session.exec(select(Bot).where(Bot.name == "Default Bot")).first()
-    if default_bot is None or default_bot.id is None:
-        return None
-    return session.exec(
-        select(ChannelConnection)
-        .where(ChannelConnection.bot_id == default_bot.id)
-        .where(ChannelConnection.provider == provider)
-    ).first()

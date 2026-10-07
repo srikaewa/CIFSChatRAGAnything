@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Any
 
 from sqlmodel import Session, select
 
 from chatbot_manager.bots.service import get_live_config
-from chatbot_manager.chatbot.engine import _normalize, _rule_matches
 from chatbot_manager.knowledge.client import (
     KnowledgeQuery,
     KnowledgeServiceClient,
@@ -45,6 +47,61 @@ class RuntimeResult:
 
 
 KnowledgeClientFactory = Callable[[Session, int], KnowledgeServiceClient]
+
+
+def _normalize(text: str) -> str:
+    return " ".join(text.strip().lower().split())
+
+
+def _rule_matches(rule: Any, normalized_text: str) -> bool:
+    def condition(pattern: str, match_type: str) -> bool:
+        normalized_pattern = _normalize(pattern)
+        if not normalized_pattern:
+            return False
+        normalized_match_type = _normalize(match_type)
+        if normalized_match_type == "exact":
+            return normalized_text == normalized_pattern
+        if normalized_match_type == "contains":
+            return normalized_pattern in normalized_text
+        if normalized_match_type == "regex":
+            try:
+                return re.search(normalized_pattern, normalized_text) is not None
+            except re.error:
+                return False
+        if normalized_match_type == "starts_with":
+            return normalized_text.startswith(normalized_pattern)
+        if normalized_match_type == "ends_with":
+            return normalized_text.endswith(normalized_pattern)
+        if normalized_match_type == "all_words":
+            return all(word in normalized_text for word in normalized_pattern.split())
+        if normalized_match_type == "any_word":
+            return any(word in normalized_text for word in normalized_pattern.split())
+        return False
+
+    results = [
+        condition(
+            getattr(rule, "pattern", ""),
+            getattr(rule, "match_type", "contains"),
+        )
+    ]
+    extra_raw = getattr(rule, "conditions", "[]")
+    if extra_raw:
+        try:
+            extra = json.loads(extra_raw) if isinstance(extra_raw, str) else extra_raw
+            for item in extra:
+                results.append(
+                    condition(
+                        item.get("pattern", ""),
+                        item.get("match_type", "contains"),
+                    )
+                )
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            pass
+
+    if not any(results):
+        return False
+    logic = getattr(rule, "condition_logic", "and")
+    return all(results) if logic == "and" else any(results)
 
 
 def build_bot_instruction(config: BotConfigVersion) -> str:

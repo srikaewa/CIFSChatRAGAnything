@@ -13,7 +13,7 @@ from chatbot_manager.auth.authorization import (
     require_bot_route_authorization,
     require_current_user,
 )
-from chatbot_manager.channel_config import CHANNEL_DEFINITIONS
+from chatbot_manager.channel_definitions import CHANNEL_DEFINITIONS
 from chatbot_manager.credentials import (
     masked_credential,
     read_credential,

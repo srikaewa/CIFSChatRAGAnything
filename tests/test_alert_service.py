@@ -222,13 +222,12 @@ async def test_sender_failure_returns_stable_error_without_token_leak() -> None:
         assert row.external_notified_at is None
 
 
-def test_operations_telegram_credentials_are_separate_from_user_facing_bot() -> None:
+def test_operations_telegram_credentials_are_explicit() -> None:
     settings = Settings(
-        telegram_bot_token="user-facing-token",
         alert_telegram_bot_token="ops-token",
         alert_telegram_chat_id="-100123",
     )
 
-    assert settings.telegram_bot_token == "user-facing-token"
     assert settings.alert_telegram_bot_token == "ops-token"
     assert settings.alert_telegram_chat_id == "-100123"
+    assert not hasattr(settings, "telegram_bot_token")

@@ -9,9 +9,7 @@ from sqlmodel import Session, select
 
 from chatbot_manager.admin.dependencies import require_admin, templates
 from chatbot_manager.auth.authorization import require_role
-from chatbot_manager.channel_config import channel_cards
 from chatbot_manager.db import get_session
-from chatbot_manager.settings import get_settings
 from chatbot_manager.models import (
     Bot,
     ChannelConnection,
@@ -153,7 +151,14 @@ def command_center(
                 connection.enabled and connection.status == "ready"
                 for connection in channels
             ),
-            "channel_cards": channel_cards(session, get_settings()),
+            "channel_cards": [
+                {
+                    "display_name": connection.display_name,
+                    "configured": connection.credential_id is not None,
+                    "state": connection.status,
+                }
+                for connection in channels
+            ],
             "knowledge_total": len(services),
             "knowledge_healthy": sum(
                 service.enabled and service.health_status == "healthy"
