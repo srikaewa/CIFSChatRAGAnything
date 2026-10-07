@@ -198,3 +198,720 @@ Phase 1 implementation and verification are complete in `.worktrees/agent-0e3daf
 2. Keep the worktree for review/integration unless explicitly asked to remove it.
 3. Next implementation phase: `docs/superpowers/plans/2026-09-13-phase-2-external-knowledge-service.md`.
 4. Before Phase 2 coding, read this handoff, the design spec, and the Phase 2 plan, then follow the same isolated-worktree + TDD workflow.
+## Phase 2 Execution Progress — 2026-09-13
+
+### Task 1 — Credential and Knowledge Service persistence COMPLETE
+
+- Worktree: `.worktrees/phase-2-external-knowledge-service` on `feat/phase-2-external-knowledge-service`.
+- Baseline before Phase 2 changes: `195 passed in 5.17s`.
+- RED: `tests/test_credentials.py` failed 2 tests because `chatbot_manager.credentials` and the new persistence contract did not exist.
+- Added `Credential` and `KnowledgeService` SQLModel tables.
+- Added canonical-JSON encrypted credential storage, read, masking, and replace/rotation helpers in `credentials.py`.
+- GREEN: `rtk uv run pytest -q tests/test_credentials.py tests/test_secret_encryption.py` -> `6 passed in 0.44s`.
+- Task commit: `543bb6d` — `feat: add encrypted knowledge service credentials`.
+- Next: Task 2 external Knowledge Service client contract.
+
+### Task 2 — External Knowledge Service client contract COMPLETE
+
+- Re-verified current upstream LightRAG contract before implementation: `/health`, `/query`, `X-API-Key`, `user_prompt`, `conversation_history`, and reference returns remain supported.
+- Security note: LightRAG 1.5.5 is the minimum approved deployment floor for the 2026 conversation-history cache/auth fixes; the legacy local lock still contains `lightrag-hku 1.5.4`, so the new external adapter does not depend on that package.
+- RED: `tests/test_knowledge_client.py` failed 9 tests because `chatbot_manager.knowledge` did not exist.
+- Added `KnowledgeQuery`, `KnowledgeAnswer`, `KnowledgeHealth`, `KnowledgeServiceClient`, `LightRAGClient`, stable `KnowledgeServiceError`, fake client, and DB client factory.
+- Client uses explicit timeouts, `follow_redirects=False`, HTTP(S)-only URLs, stable sanitized error codes, and optional `X-API-Key`.
+- GREEN: `rtk uv run pytest -q tests/test_knowledge_client.py tests/test_credentials.py` -> `11 passed in 0.36s`.
+- `git diff --check` PASS.
+- Task commit: `620ff46` — `feat: add external LightRAG client`.
+- Next: Task 3 Knowledge Service registry and safe connection testing.
+
+### Task 3 — Knowledge Service registry and safe connection testing COMPLETE
+
+- RED: `rtk uv run pytest -q tests/test_knowledge_services_admin.py` -> `7 failed`, all expected 404s because the registry routes did not exist.
+- Added `/knowledge-services` list/create/update, connection test, and transient test-retrieval routes using existing admin auth + CSRF conventions.
+- API keys are encrypted at rest, masked in UI, and replace-only; a blank key edit preserves the existing credential.
+- Registry validates `http/https` service and WebUI URLs, opens the external manager with `noopener noreferrer`, persists health status/timestamp, and maps failures to stable sanitized codes without exposing raw exception bodies.
+- Test Retrieval renders the response/references without creating production `ChatEvent` history.
+- GREEN: `rtk uv run pytest -q tests/test_knowledge_services_admin.py tests/test_secret_encryption.py tests/test_failure_handling.py` -> `14 passed in 0.95s`.
+- Task commit: `6b9f607` — `feat: add knowledge service registry`.
+- Next: Task 4 bind Bot Drafts to Knowledge Services.
+
+### Task 4 — Bind Bot Drafts to Knowledge Services COMPLETE
+
+- RED: `rtk uv run pytest -q tests/test_bot_admin.py` -> `3 failed, 5 passed`; all new failures were expected 404s because the Bot Knowledge route did not exist.
+- Added `GET/POST /bots/{bot_id}/knowledge` and `bot_knowledge.html`.
+- POST validates the selected enabled Knowledge Service, calls `ensure_draft_config()`, and writes `knowledge_service_id` to the Draft only.
+- Live configuration is never changed by this route; disabled services are rejected before a Draft is created.
+- Bot Knowledge view shows Live/Draft bindings, service health, external RAG manager link, and a Test Retrieval entry point.
+- GREEN: `rtk uv run pytest -q tests/test_bot_admin.py tests/test_bot_foundation.py` -> `13 passed in 1.03s`.
+- Task commit: `f00fbdc` — `feat: bind bot drafts to knowledge services`.
+- Next: Task 5 retire local Knowledge/Graph management from normal navigation while preserving direct legacy routes.
+
+### Task 5 — Retire local Knowledge management from normal navigation COMPLETE
+
+- RED: `rtk uv run pytest -q tests/test_admin_routes.py tests/test_phase4_knowledge_graph.py` -> `1 failed, 30 passed`; only the new primary-navigation contract failed because the legacy Knowledge/Graph links were still present.
+- Primary navigation now exposes `Knowledge Services` and no longer links local `/knowledge` or `/knowledge-graph`.
+- Legacy local Knowledge/Graph routes and APIs remain implemented and directly reachable; route groups are marked as migration paths for removal only after Phase 6 dependency verification.
+- README now states the system boundary: external RAG-Anything/LightRAG owns documents, indexing, graph management, retrieval, and grounded answer generation; CIFS stores service bindings/credentials.
+- GREEN: `rtk uv run pytest -q tests/test_admin_routes.py tests/test_phase4_knowledge_graph.py tests/test_knowledge_services_admin.py` -> `38 passed in 2.10s`.
+- Task commit: `5cf0277` — `refactor: move knowledge management to external service`.
+- Next: Task 6 Phase 2 verification and authorized external-RAG checkpoint.
+
+### Task 6 — Phase 2 verification and external-RAG checkpoint
+
+**Implementation/local verification COMPLETE; real authorized deployment smoke PENDING because no external deployment configuration is available in this workspace.**
+
+- Deployment discovery: Phase 2 worktree contains no `.env`; read-only inspection of the existing development DB showed it predates Phase 2 and has no `knowledgeservice` table/registered external endpoint. No real endpoint/version/API key was available to verify, so no external success was fabricated.
+- Upstream adapter contract was re-checked against current official LightRAG documentation during Task 2: `GET /health`, `POST /query`, optional `X-API-Key`, `user_prompt`, `conversation_history`, and references match the adapter. External deployments used here must meet the approved LightRAG security floor `>=1.5.5`; the legacy local `uv.lock` still contains `lightrag-hku 1.5.4`, but the new external HTTP adapter does not depend on that library.
+- Focused verification: `rtk uv run pytest -q tests/test_credentials.py tests/test_knowledge_client.py tests/test_knowledge_services_admin.py tests/test_bot_admin.py tests/test_secret_encryption.py tests/test_failure_handling.py` -> `33 passed in 1.51s`.
+- Full verification: `rtk uv run pytest -q` -> `217 passed in 6.14s`; `rtk uv run python -m compileall -q apps/api` -> exit 0; `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`); `/usr/bin/git diff --check` -> exit 0 (JJ ACC direct `git diff --check` safety gate was unavailable, and `rtk git` is unsupported).
+- Isolated migration/UI checkpoint used `/tmp/cifs-phase2-manual.sqlite3`, copied from the development DB; the real DB was only inspected read-only and was not modified.
+- Disposable local LightRAG-compatible endpoint required the configured API key, returned Healthy from `/health`, returned a grounded answer plus `manual-guide.pdf` reference from `/query`, and exposed `/webui`.
+- Browser UI verified: primary nav shows `Knowledge Services` and no local Upload/Graph links; created service shows masked key `man...key`; Test Connection -> Healthy; Test Retrieval -> grounded answer + reference; external manager endpoint reachable; Default Bot / Knowledge saved the service to Draft.
+- Copied-DB verification after UI binding: Default Bot `live_config_version_id=1`, `draft_config_version_id=2`; Live v1 is `published` with `knowledge_service_id=None`; Draft v2 is `draft` with `knowledge_service_id=1`; credential payload starts `enc:v1:` and does not contain the plaintext API key.
+- Remaining deployment checkpoint: when an authorized real LightRAG/RAG-Anything endpoint is available, record its exact version, verify its `/health` + `/query` paths/auth without printing the key, then repeat Test Connection/Test Retrieval against that endpoint.
+- Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-3-runtime-conversations.md`.
+
+## Phase 3 Execution Progress — 2026-09-14
+
+- Worktree: `/home/srikaewa/Data-II/Projects/ChatBot/CIFSChatbotManager-phase3-worktree` on `feat/phase-3-runtime-conversations`, branched from completed Phase 2 head `70c1738`.
+- Baseline before Phase 3 changes: `217 passed in 7.48s`.
+
+### Task 1 — Bot-owned ChannelConnection migration COMPLETE
+
+- RED: `rtk uv run pytest -q tests/test_channel_connections.py` failed at collection because `chatbot_manager.channel_connections` did not exist.
+- Added `ChannelConnection`, encrypted credential migration helpers, idempotent legacy-channel migration, legacy Default Bot lookup, and startup migration after Default Bot bootstrap.
+- Multiple provider accounts are now representable because `ChannelConnection.provider` is not globally unique; webhook keys are unique random values.
+- GREEN: `rtk uv run pytest -q tests/test_channel_connections.py tests/test_secret_encryption.py` -> `7 passed in 0.53s`.
+- Task commit: `d81b111` — `feat: add bot-owned channel connections`.
+- Next: Task 2 normalize provider message IDs for idempotency.
+
+### Task 2 — Normalize provider message IDs COMPLETE
+
+- RED: provider adapter suite -> `6 failed, 13 passed`; failures showed missing `external_message_id`/timestamp fields and acceptance of text events without stable IDs.
+- `IncomingMessage` now carries provider, stable external message ID, external user ID, text, timestamp milliseconds, reply context, attachment metadata, and raw event.
+- LINE uses `message.id`; Messenger uses `message.mid`; Telegram uses `update_id:message_id`. Text events without stable IDs are skipped.
+- GREEN: `rtk uv run pytest -q tests/test_line_channel.py tests/test_messenger_channel.py tests/test_telegram_channel.py` -> `19 passed in 0.06s`.
+- Task commit: `7734686` — `feat: normalize provider message identity`.
+- Next: Task 3 durable conversation/message/decision/handoff persistence.
+
+### Task 3 — Durable conversations and decision history COMPLETE
+
+- RED: `tests/test_conversation_service.py` failed at collection because the new conversation/decision models did not exist.
+- Added `Conversation`, `ConversationMessage`, `ConversationHandoffEvent`, and `BotDecision`.
+- Added `ConversationService` with 24-hour open-session reuse, closed/stale session rollover, inbound message idempotency, and bounded oldest-to-newest prompt history that excludes internal notes/system events.
+- GREEN: `rtk uv run pytest -q tests/test_conversation_service.py` -> `6 passed in 0.43s`.
+- Task commit: `3d0c701` — `feat: add durable conversations and decision history`.
+- Next: Task 4 BotRuntime with deterministic rules + external Knowledge Service.
+
+### Task 4 — Bot-scoped runtime engine COMPLETE
+
+- RED: `tests/test_bot_runtime.py` failed at collection because `chatbot_manager.runtime.engine` did not exist.
+- Added `RuntimeRequest`, `RuntimeResult`, deterministic Bot instruction builder, Live/explicit config resolution, legacy-compatible rule matching, external Knowledge Service query path, fallback/escalation handling, and persisted `BotDecision` trace.
+- Rule actions supported: `RESPOND`, `ESCALATE`, `BLOCK`, `CONTINUE_TO_RAG`; direct actions skip external knowledge.
+- External RAG receives the user query, Bot-specific instructions, and bounded conversation history; returned references/latency are preserved without a second LLM rewrite.
+- GREEN: `rtk uv run pytest -q tests/test_bot_runtime.py tests/test_chatbot_engine.py` -> `23 passed in 0.83s`.
+- Task commit: `e8bd9c1` — `feat: add bot-scoped runtime engine`.
+- Next: Task 5 human handoff state machine and provider delivery service.
+
+### Task 5 — Human handoff and provider delivery COMPLETE
+
+- RED: `tests/test_handoff_service.py` failed at collection because the handoff/delivery services did not exist.
+- Added `HandoffService` with `escalate`, atomic conditional `take`, `assign`, `return_to_bot`, and `close`, plus durable handoff events and stable state errors.
+- Added `DeliveryService` that reconstructs LINE/Messenger/Telegram adapters from encrypted `ChannelConnection` credentials and maps provider failures to `provider_delivery_failed` without leaking response bodies.
+- Regression follow-up: the new `IncomingMessage` identity fields received safe defaults for legacy/manual construction while provider parsers still require and populate stable IDs.
+- GREEN: handoff + failure-handling + provider adapter verification -> `29 passed in 0.61s`.
+- Task commit: `f85692e` — `feat: add human handoff and delivery services`.
+- Next: Task 6 switch provider webhooks to BotRuntime with idempotency and compatibility aliases.
+
+### Task 6 — Production webhooks switched to BotRuntime COMPLETE
+
+- RED: Phase 3 webhook integration tests initially failed on missing keyed endpoints, duplicate handling, human-active short-circuiting, escalation state, and ambiguous legacy aliases.
+- Added keyed `/{provider}/{webhook_key}` webhook routing plus fixed-path legacy aliases, lazy idempotent migration for legacy Channel rows, credential-derived readiness checks, preserved provider authenticity validation, and stable ambiguous-alias failure.
+- Production message orchestration is now `ChannelConnection -> Conversation -> BotRuntime -> Handoff/Delivery`; duplicate provider message IDs do not re-run runtime or re-send replies; `human_active` persists inbound messages but performs zero Bot generation.
+- Compatibility `ChatEvent` rows remain for the legacy Logs page, while Conversations/Messages/Decisions are the authoritative runtime state. Legacy `process_messages()` remains only as a compatibility helper and is no longer called by production webhook routes.
+- Updated webhook fixtures to seed Bot-scoped published rules and stable provider message IDs.
+- GREEN: `rtk uv run pytest -q tests/test_webhooks.py tests/test_telegram_webhooks.py tests/test_webhook_security.py tests/test_failure_handling.py` -> `29 passed in 1.41s`.
+- Task commit: `591c317` — `feat: switch webhooks to bot runtime`.
+- Next: Task 7 Unified Inbox and admin human-reply workflow.
+
+### Task 7 — Unified Inbox and human reply workflow COMPLETE
+
+- Task implementation commit: `7baeea7` — `feat: add unified conversation inbox`.
+- Added global/Bot-filtered Conversation Inbox and detail views with status/channel/assignment/search filters, chronological messages, handoff events, internal notes, delivery state, and decision trace visibility.
+- Added admin actions for take, temporary Phase 3 assignment (`operator_id=0` + authenticated admin email metadata), human reply through the original `ChannelConnection`, return-to-bot, close, and internal note.
+- Human replies persist operator messages and delivery state; LINE operator replies use push delivery when the inbound one-time reply token is no longer appropriate.
+- Return-to-bot changes state only and does not replay the last user message. Internal notes are neither sent to providers nor included in Bot prompt history.
+- Added `Conversations` navigation and Bot Workspace links to the shared filtered Inbox rather than duplicating UI.
+- Task 7 implementation is committed and the Phase 3 worktree was clean before Task 8. Fresh focused/full verification is intentionally rerun in Task 8 below before any phase-complete claim.
+- Next: Task 8 Phase 3 verification and manual provider/handoff checkpoint.
+
+### Task 8 — Phase 3 verification and manual provider/handoff checkpoint COMPLETE
+
+- Task 8 first restored the missing Task 7 handoff entry, then reran verification from the Phase 3 worktree without touching `main`.
+- The first full regression run found one compatibility failure: the legacy Messenger provider-contract fixture omitted `message.mid`, which Phase 3 intentionally requires as a stable external message ID. Adding the stable ID exposed a second, real transition bug: legacy `/rules` edits still wrote only `Rule`, while Phase 3 production runtime reads immutable `BotConfigRule` snapshots.
+- Root-cause fix: legacy Rule create/update/delete now publish a new immutable Default Bot config snapshot containing the current legacy Rule set and repoint `live_config_version_id`; the previous published version remains unchanged for history. Messenger contract fixture now supplies a stable `mid`.
+- Compatibility fix commit: `0b42625` — `fix: preserve legacy rule edits in bot runtime`.
+- Targeted regression after the fix: `uv run pytest -q tests/test_phase3_provider_contracts.py::test_messenger_webhook_processes_text_rule_end_to_end tests/test_messenger_channel.py tests/test_admin_routes.py` -> `33 passed in 1.68s`.
+- Required Phase 3 focused verification: `77 passed in 2.62s`.
+- Full regression verification: `uv run pytest -q` -> `252 passed in 8.08s`.
+- Compile verification: `python3 -m compileall -q apps/api` -> exit 0. (`rtk` was not available in the JJ ACC runner PATH, so the equivalent direct Python command was used.)
+- Lockfile verification: `uv lock --check` -> exit 0, `Resolved 175 packages`.
+- `git diff --check` -> exit 0.
+- Manual isolated checkpoint used an in-memory disposable app database, a local authenticated LightRAG-compatible HTTP service, a Messenger `ChannelConnection`, valid Messenger HMAC signatures, and a simulated successful provider-delivery boundary. No production DB or external provider was modified.
+- Manual checkpoint PASS: normal question resolved to the correct Bot and local external-RAG-compatible service; grounded reply delivered; duplicate provider message caused no duplicate RAG call/reply; explicit escalation moved the conversation to `needs_human`; Take moved it to `human_active`; inbound during `human_active` was persisted with zero Bot/RAG delivery; Inbox operator reply used the original `ChannelConnection`; Return to Bot generated no replay; the next inbound resumed Bot processing and the RAG conversation history contained the operator response. Smoke summary: `rag_queries=2`, `deliveries=4`, `conversation_id=1`.
+- Real-network limitation: this workspace still has no authorized real provider + external RAG deployment configuration recorded, so no live provider message was sent and no real external endpoint success is claimed. When authorized deployment details are available, repeat the same provider/RAG smoke without printing secrets.
+- **Phase 3 is complete for implementation and local verification.**
+- Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-4-draft-test-publish.md`.
+- Keep `/home/srikaewa/Data-II/Projects/ChatBot/CIFSChatbotManager-phase3-worktree` on `feat/phase-3-runtime-conversations` for review/integration; do not modify `main` during Phase 3 closeout.
+
+## Phase 4 Execution Progress — 2026-10-05
+
+- Worktree: `/home/srikaewa/Data-II/Projects/ChatBot/CIFSChatbotManager/.worktrees/phase-4-draft-test-publish`
+- Registered JJ ACC workspace: `0a2a587a-6899-41e1-b91f-b77958ec0bb4` (`CIFSChatbotManager Phase4 Worktree`).
+- Branch: `feat/phase-4-draft-test-publish`, branched from Phase 3 completed head `dfa4364`.
+- Phase 4 plan: `docs/superpowers/plans/2026-09-13-phase-4-draft-test-publish.md`.
+- Baseline before Phase 4 changes: `uv run pytest -q` -> `252 passed in 9.40s`.
+
+### Task 1 — Version lifecycle service COMPLETE
+
+- Added `apps/api/chatbot_manager/bots/versions.py` with centralized deep-clone/version lifecycle helpers, Draft-only editable config/rule operations, restore-as-Draft, published immutability checks, and atomic Draft publish pointer switch.
+- `ensure_draft_config()` now delegates to the centralized lifecycle service.
+- RED: new version-service tests initially failed because `chatbot_manager.bots.versions` did not exist.
+- Targeted GREEN: `uv run pytest -q tests/test_version_service.py tests/test_bot_foundation.py` -> `12 passed in 0.35s`.
+- Full regression before commit: `259 passed in 8.37s`; `git diff --check` exit 0.
+- Commit: `3bed305` — `feat: add bot configuration version lifecycle`.
+
+### Task 2 — Saved regression tests and deterministic evaluator COMPLETE
+
+- Added `BotTestCase`, `BotTestRun`, and `BotTestResult` persistence models.
+- Added behavioral evaluator and `RegressionService`; assertions cover decision type, RAG use, references, escalation, fallback, required terms, and latency warnings without exact-response equality.
+- Important side-effect correction discovered before commit: initial suite implementation created synthetic `Conversation`, `ConversationMessage`, and `BotDecision` rows. A new RED assertion exposed this; the implementation was corrected so `test_mode=True` does not persist production decision rows and regression execution uses sentinel IDs without creating production conversation/message records. Only Bot test history persists.
+- Targeted GREEN: regression/runtime tests -> `10 passed in 0.51s`.
+- Full regression before commit: `264 passed in 8.26s`; `git diff --check` exit 0.
+- Commit: `36d2831` — `feat: add chatbot regression test service`.
+
+### Task 3 — Readiness checks COMPLETE
+
+- Added deterministic readiness service covering Bot profile, behavior coherence, Knowledge Service binding/health when RAG is expected, channel readiness using actual required credential fields, and saved regression-case presence.
+- Readiness performs no external calls; it reads persisted health state. No enabled channel and zero saved tests are warnings, while an enabled incomplete channel or unhealthy required Knowledge Service is a failure.
+- RED: `tests/test_readiness.py` initially failed because `chatbot_manager.testing.readiness` did not exist.
+- Targeted GREEN: `5 passed in 0.44s`.
+- Full regression before commit: `269 passed in 8.49s`; `git diff --check` exit 0.
+- Commit: `9848378` — `feat: add bot readiness checks`.
+
+### Task 4 — Publish gate and atomic publication COMPLETE
+
+- Added `PublishService` and `PublishBlocked` around the lifecycle publish primitive.
+- Gate order: load Bot/Draft -> readiness -> fresh Knowledge `test_connection()` when bound -> fresh regression suite on the exact Draft -> FAIL blocks -> WARNING requires explicit acknowledgement -> atomic `publish_draft()`.
+- Tests include the concurrent/runtime snapshot property: a request explicitly captured on v1 continues using v1 after v2 publishes, while a new default production request resolves v2.
+- RED: `tests/test_publish_flow.py` initially failed because `PublishBlocked`/publish gate did not exist.
+- Targeted GREEN: publish/version/runtime tests -> `16 passed in 0.89s`.
+- Full regression before commit: `273 passed in 9.51s`; `git diff --check` exit 0.
+- Commit: `7b30dbb` — `feat: enforce bot publish gate`.
+
+### Task 5 — Draft editing and Setup Wizard COMPLETE
+
+- Added Bot creation as lifecycle `draft` with a new Draft v1 and no Live version; create redirects into the Setup Wizard.
+- Added Draft-only Behavior, Knowledge binding, and deterministic Rules editing through the centralized version lifecycle service so published rows remain immutable.
+- Added shared Bot Workspace header/navigation with lifecycle, Live/Draft, Knowledge, and channel readiness signals; Overview, Behavior, Rules, and Knowledge use the shared workspace surface.
+- Added the ordered Setup Wizard flow: Profile -> Knowledge -> Behavior -> Channels -> Test, with readiness results shown before lifecycle progression.
+- Added lifecycle actions: Draft -> Ready after Draft readiness has no FAIL; Ready -> Active only with an existing Live config and readiness; Active -> Paused immediately; Paused -> Active only when the Live config passes readiness. Pause and resume do not alter Live/Draft pointers.
+- TDD evidence: first RED was `5 failed, 8 passed` for the intended missing Task 5 routes/UI; expanded lifecycle/workspace coverage was also observed RED at `9 failed, 8 passed` before implementation.
+- Bot admin GREEN: `17 passed in 1.65s`.
+- Plan targeted suite: `29 passed in 1.77s`.
+- Full regression before commit: `282 passed in 10.22s`.
+- Test-mode isolation rechecked explicitly: `1 passed in 0.41s`; regression execution still creates no production `Conversation`, `ConversationMessage`, or `BotDecision` rows.
+- `git diff --check` and staged `git diff --cached --check` both exited 0.
+- Commit: `81e0c48` — `feat: add bot draft editing and setup wizard`.
+- Ruling recorded in the SDD ledger: Setup Wizard is the guided pre-workspace flow from the approved spec; persistent workspace header/navigation begins on the Bot Workspace pages. Global legacy navigation now labels `/channels` as `Channel Connections` so the Wizard's ordered `Channels` step is unambiguous.
+
+### Task 6 — Test Center, Versions, Publish UI COMPLETE — 2026-10-06
+
+- Added `admin/test_center.py` and router wiring for Draft interactive testing, saved test cases/toggle/run, Live-vs-Draft compare, publish through the existing `PublishService`, Versions history, and restore-as-Draft.
+- Added `bot_test.html` and `bot_versions.html` using the shared Bot Workspace header/navigation.
+- Interactive and compare requests execute the real `BotRuntime` with explicit config IDs and `test_mode=True`; no provider delivery path is invoked and no production `Conversation`, `ConversationMessage`, or `BotDecision` rows are created.
+- Added conversation-message `Add to Test Suite`; only user messages are accepted. The seeded case is disabled, copies the exact user input, and starts with `expected_behavior_json={}` so no expected behavior is invented.
+- Publish failures render the stable `PublishBlocked` code without switching Live/Draft pointers.
+- Published-version restore creates a new higher-numbered Draft and leaves Live unchanged.
+- Diff review found and TDD-locked an operational lifecycle edge case: publishing a new Draft while a Bot is paused must not unpause it. RED: `test_publish_success_preserves_paused_lifecycle` failed with `active != paused`; GREEN after preserving `paused` during publish.
+- Initial Task 6 RED: `tests/test_test_center_admin.py` -> `6 failed` for missing Test/Versions/Add-to-Test-Suite surfaces.
+- Task 6 core GREEN: `6 passed in 0.92s`.
+- Plan targeted suite before edge fix: `15 passed in 1.12s`; final targeted suite after edge fix: `16 passed in 1.22s`.
+- Full regression before commit: `289 passed in 11.06s`.
+- `git diff --check` and staged `git diff --cached --check` exited 0.
+- Commit: `f149c8d` — `feat: add bot test and publish center`.
+
+### Task 7 — Bot-centric primary admin navigation COMPLETE — 2026-10-06
+
+- Primary navigation now keeps Dashboard, Bots, Conversations, and Knowledge Services as the global surfaces; legacy Assistant/Rules/Channels/Test Chat/Logs links were removed from the primary nav but their direct routes remain available for migration/debugging.
+- Legacy pages retain accessible location context: Channels/Rules/Assistant/Test Chat map the active primary surface to Bots, while Logs maps to Conversations.
+- README now documents Bot Workspace, Conversations, Knowledge Services, Test Center, and Versions as the current admin workflow.
+- RED: `uv run pytest -q tests/test_bot_admin.py tests/test_admin_routes.py` -> `1 failed, 44 passed` because legacy links were still present.
+- First full regression exposed one accessibility regression on direct `/channels`: no primary-nav item had `aria-current="page"`. The active-surface mapping above fixed that without restoring the legacy primary link.
+- Focused accessibility + Task 7 suite: `53 passed in 3.78s`.
+- Final full regression: `290 passed in 11.27s`.
+- Commit: `0a41848` — `refactor: make bot workspace primary admin surface`.
+
+### Task 8 — Phase 4 verification and manual publish checkpoint COMPLETE — 2026-10-06
+
+- Initial automated gate on Task 7 HEAD:
+  - focused Phase 4 suite -> `51 passed in 2.75s`;
+  - full suite -> `290 passed in 10.26s`;
+  - `uv run python -m compileall -q apps/api` -> exit 0;
+  - `uv lock --check` -> exit 0;
+  - `git diff --check` -> exit 0.
+- Manual checkpoint ran against an isolated in-memory SQLite database and a local fake LightRAG-compatible endpoint; it did not touch production data or real provider accounts.
+- Manual checkpoint entities: Knowledge Service ID 1 (`Phase 4 Manual RAG`); Bot ID 2 (`Phase 4 Manual Bot`).
+- The manual flow exposed a real Phase 4 gap: a new Bot's Workspace `Channels` link still opened the legacy global `/channels` page, and there was no route capable of creating a Bot-scoped `ChannelConnection`.
+- TDD correction:
+  - RED: Bot Workspace navigation + Bot-scoped channel save tests -> `2 failed`;
+  - implemented `/bots/{bot_id}/channels` GET/POST with encrypted replace-only credentials, one connection per Bot/provider, readiness-compatible status, and Bot Workspace/Setup Wizard links;
+  - targeted navigation/channel/readiness verification -> `8 passed in 0.77s`;
+  - commit: `72b7be8` — `fix: add bot-scoped channel connections`.
+- Manual UI checkpoint after that correction:
+  - registered/tested the local Knowledge Service -> Healthy;
+  - created Draft Bot 2 and selected the Knowledge Service;
+  - edited Behavior and added deterministic `hello -> Manual draft response` rule;
+  - attached an enabled Bot-scoped LINE connection with local dummy credentials -> Channels Pass;
+  - Interactive Test `hello` -> `Manual draft response`, Decision Trace `Config 2 · Rule`;
+  - created saved PASS case ID 1 and intentional failing case ID 2;
+  - observed regression `Run 1 · FAIL`;
+  - publish was blocked with `regression_failed`;
+  - explicitly disabled obsolete failing case ID 2;
+  - observed `Run 3 · PASS`, then successfully published -> Active / Live v1 / Draft —;
+  - edited Live-derived Draft v2, observed `Run 5 · PASS`, published -> Live v2;
+  - Versions restore of v1 created Draft v3 while Live remained v2;
+  - observed `Run 7 · PASS`, published restored Draft -> Active / Live v3 / Draft —;
+  - final local signals: Knowledge Healthy, Channels Pass.
+- Fresh automated verification after the Bot-scoped Channels correction:
+  - focused Phase 4 suite -> `52 passed in 2.94s`;
+  - full suite -> `291 passed in 10.42s`;
+  - `uv run python -m compileall -q apps/api` -> exit 0;
+  - `uv lock --check` -> exit 0;
+  - `git diff --check` and staged diff check -> exit 0.
+- Real-network limitation was freshly checked without printing secrets: this worktree has no configured LINE, Messenger, or Telegram environment credentials and no configured LLM API key; the default local database is not initialized to the current `ChannelConnection` schema. Therefore no real external-provider production message or real deployed external-RAG smoke is claimed. The local runtime/version behavior is covered by the passing publish/runtime regression tests and the isolated manual UI checkpoint above.
+- Temporary local app/RAG verification services were stopped after the checkpoint.
+
+### Phase 4 status
+
+- **Phase 4 Draft/Test/Publish is complete for implementation, automated verification, and isolated manual verification.**
+- Published-version immutability, Draft-only editing, Test Center isolation, readiness/regression publish gates, pause semantics, restore-as-Draft, Bot-scoped channel readiness, and Bot-centric navigation are all covered by tests.
+- The only unverified item is a real external-provider/deployed-RAG production smoke, because this worktree has no authorized live configuration.
+- Next implementation plan: `docs/superpowers/plans/2026-09-13-phase-5-operations-monitoring.md`.
+- Continue in this Phase 4 worktree for review/integration; do not modify `main` unless explicitly authorized.
+
+## Phase 5 Execution Progress — 2026-10-06
+
+### Task 1 — Incident persistence and deduplicating IncidentService COMPLETE
+
+- Continued in the existing `.worktrees/phase-4-draft-test-publish` worktree on `feat/phase-4-draft-test-publish`; Phase 4 was not redone.
+- Fresh Phase 5 baseline before changes: `rtk uv run pytest -q` -> `291 passed in 11.41s`.
+- RED: `rtk uv run pytest -q tests/test_incident_service.py` failed during collection because `Incident` was not yet implemented.
+- Added `Incident` persistence with indexed severity/source/type/dedup/status fields, first/last/resolved timestamps, JSON details/affected-Bot fields, and `external_notified_at` for the later alert task.
+- Added `IncidentSignal`, exact root-source dedup key (`<incident_type>:<source_type>_<source_id>`), and `IncidentService.observe/resolve/acknowledge`.
+- Active dedup searches only `open`/`acknowledged`; repeated observations update one active row while preserving `first_seen_at`; recovery resolves that row; a later recurrence creates a new incident instead of rewriting history.
+- Acknowledgement is lifecycle-only in Task 1. The `actor` argument is accepted but not persisted because neither the approved Incident spec nor the Task 1 schema defines acknowledgement actor/timestamp fields; actor-level audit remains a later concern rather than being hidden in mutable incident details.
+- Persistence/reload coverage closes and reopens a fresh SQLModel `Session`, confirming acknowledged state, details, and affected Bot IDs survive reload.
+- Focused GREEN: `4 passed in 0.47s`; final focused verification before commit: `4 passed in 0.44s`.
+- Full suite: `295 passed in 11.10s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 1 implementation commit: `7406243` — `feat: add deduplicated incident tracking`.
+- Next Phase 5 task: Task 2 — Runtime and Integration Health Checks.
+
+### Task 2 — Runtime and Integration Health Checks COMPLETE
+
+- Task 2 started from clean HEAD `9b51cae`; fresh baseline: `rtk uv run pytest -q` -> `295 passed in 12.00s`.
+- RED: `rtk uv run pytest -q tests/test_health_service.py` failed during collection because `chatbot_manager.operations.health` did not yet exist.
+- Added `HealthSignal` and `HealthService` with three bounded checks: database runtime health, enabled Knowledge Service health, and channel evidence health.
+- Database health reports `Healthy` only after `SELECT 1` succeeds; failures become `unavailable / critical / database_unavailable` without exception text leakage.
+- Knowledge health probes each enabled service once through the existing client factory and computes affected Bots from Live config bindings. A shared RAG outage yields one root signal containing all affected Bot IDs rather than one signal per Bot.
+- Knowledge statuses are normalized to the Phase 5 operational vocabulary: healthy -> `healthy`; unavailable/unauthorized/invalid -> `unavailable / critical` with stable existing detail codes.
+- Channel health does not invent provider uptime. Disabled connections return `unknown`; not-ready or recorded-error connections return `degraded`; configured connections with only recent activity evidence return `unknown / channel_recent_activity`; otherwise `unknown / channel_configured_no_active_probe`.
+- No new channel schema or provider probe was added because current `ChannelConnection` has no dedicated activity/error columns and the provider adapters expose no reliable active health endpoint. Optional existing `metadata_json` evidence is used when present.
+- Diff review exposed a timezone bug in activity evidence: offset-aware timestamps were being stripped rather than converted to UTC. Added a regression test that failed RED, then normalized aware timestamps to UTC before freshness comparison.
+- First focused GREEN across Health/Knowledge/Channel suites: `18 passed in 0.58s`; final focused suite after timezone correction: `19 passed in 0.63s`.
+- Fresh full suite after the correction: `302 passed in 11.43s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 2 implementation commit: `786b650` — `feat: add system and integration health checks`.
+- Next Phase 5 task: Task 3 — Operational and Quality Metrics.
+
+### Task 3 — Operational and Quality Metrics COMPLETE
+
+- Task 3 started from clean HEAD `46c62b8`; fresh baseline: `rtk uv run pytest -q` -> `302 passed in 11.49s`.
+- RED: `rtk uv run pytest -q tests/test_metrics_service.py` failed during collection because `chatbot_manager.operations.metrics` did not yet exist.
+- Added direct-query `MetricService.summary(start, end, bot_id=None)` plus typed `MetricSummary` / `MetricValue` results. No metric warehouse or duplicate message-content storage was introduced.
+- Quality metrics implemented with hand-checked formulas: Bot resolution rate, fallback rate, escalation rate, and RAG failure rate.
+- Bot resolution uses conversations started in the selected window and counts only `closed`/`bot_active` conversations with no durable `taken`/`assigned` handoff event; a later return to Bot does not erase prior human takeover.
+- RAG-attempt denominator includes successful `rag` decisions plus fallback/escalation decisions carrying `knowledge_*` errors, excluding `knowledge_service_not_configured` because no external query was attempted.
+- Operations metrics implemented: message count, average BotDecision response latency, and human-wait count. The wait warning threshold is a `MetricService` constructor argument defaulting to 10 minutes so Task 4 can later inject its setting without pre-implementing Task 4.
+- Every returned metric carries a `/conversations` drill-down URL; the required fallback contract is exactly `/conversations?bot_id=2&decision=fallback&from=2026-09-13T00:00:00&to=2026-09-13T23:59:59`.
+- Benchmark fixture used isolated file-backed SQLite with 10,000 `BotDecision` rows. Visible timing: `metric_summary_10000_seconds=0.107288` (an earlier run was `0.117315`). Direct summaries are comfortably sub-second, therefore no `MetricAggregate` table/model was added and `apps/api/chatbot_manager/models.py` remains unchanged.
+- Final focused Task 3 suite: `4 passed in 1.34s`.
+- Fresh full suite: `306 passed in 13.17s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 3 implementation commit: `2c95546` — `feat: add chatbot operations metrics`.
+- Next Phase 5 task: Task 4 — Telegram Alert Policy.
+
+### Task 4 — Telegram Alert Policy COMPLETE
+
+- Task 4 started from clean HEAD `d1a9e0e`; fresh baseline: `rtk uv run pytest -q` -> `306 passed in 13.63s`.
+- RED: `rtk uv run pytest -q tests/test_alert_service.py` failed during collection because `chatbot_manager.operations.alerts` did not yet exist.
+- Added `AlertPolicy`, `AlertResult`, and async `TelegramAlertService.notify_incident()`.
+- Policy behavior is explicit: Critical -> immediate Telegram; Warning -> only after `warning_persist_minutes`; Info -> no Telegram; repeated active notifications -> cooldown suppression.
+- Cooldown defaults to 15 minutes as a constructor policy value because the approved Phase 5 settings list does not define a cooldown environment variable.
+- Recovery is schema-free and one-shot: `Incident.external_notified_at` is the timestamp of the last successful external notification. A resolved incident sends recovery only when it was previously externally notified and that timestamp predates `resolved_at`; after successful recovery the timestamp advances to at least `resolved_at`, suppressing subsequent recovery duplicates.
+- Sender reuses the existing `TelegramAdapter` and includes severity/recovery state, incident type/source, affected Bot names, incident start time, and relative route `/incidents/<id>`.
+- Sender does not include incident `details_json` or conversation/message content.
+- Telegram exceptions are caught and mapped to stable `telegram_alert_failed`; failed sends do not update `external_notified_at`, and token-bearing URLs/upstream response bodies are not returned.
+- Added approved Phase 5 settings and `.env.example` keys: `OPS_POLL_SECONDS`, `WARNING_PERSIST_MINUTES`, `HUMAN_WAIT_WARNING_MINUTES`, `HUMAN_WAIT_CRITICAL_MINUTES`, `RAG_LATENCY_WARNING_MS`, `RAG_LATENCY_CRITICAL_MS`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`.
+- Operational Telegram credentials are separate from the existing user-facing `TELEGRAM_BOT_TOKEN`; no implicit fallback/reuse was added.
+- Focused verification: `rtk uv run pytest -q tests/test_alert_service.py tests/test_telegram_channel.py` -> `19 passed in 0.29s`.
+- Fresh full suite: `315 passed in 13.34s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 4 implementation commit: `405ba4b` — `feat: add incident telegram alerts`.
+- Next Phase 5 task: Task 5 — Lightweight Operations Scheduler.
+
+### Task 5 — Lightweight Operations Scheduler COMPLETE
+
+- Task 5 started from clean HEAD `d6e16a5`; fresh baseline: `rtk uv run pytest -q` -> `315 passed in 13.41s`.
+- RED: `rtk uv run pytest -q tests/test_operations_scheduler.py` failed during collection because `chatbot_manager.operations.scheduler` did not yet exist.
+- Added `OperationsScheduler.run_once()` and `run_forever()` for the current single-instance deployment.
+- Health processing is evidence-aware: `unavailable`/`degraded` with warning/critical severity opens or updates an incident and invokes alert policy; only `healthy` is trusted recovery evidence; `unknown` neither opens nor resolves incidents.
+- Trusted healthy recovery resolves all active incident codes for the same root source, so recovery works even though failure codes such as `knowledge_service_unavailable` differ from healthy codes such as `knowledge_service_healthy`.
+- Component boundaries are isolated: system/Knowledge/channel health failures, per-signal processing failures, human-queue metric failures, RAG-latency evaluation failures, alert exceptions, and an unexpected outer iteration error do not terminate the periodic loop. Logs use stable component codes rather than external exception detail.
+- Human queue uses the existing `MetricService` at the configured warning/critical thresholds and emits one stable `human_wait_sla` incident; old waiting conversations remain eligible rather than disappearing from a short rolling window.
+- RAG SLA monitoring uses `BotDecision.retrieval_latency_ms` from the current poll interval and emits one stable `rag_latency_sla` incident at configured 3000/8000 ms warning/critical thresholds. Overall response latency is not incorrectly used as a RAG-latency proxy.
+- No fallback/escalation/RAG-failure percentage incidents were invented because the approved plan/spec defines no percentage thresholds for those analytics rates.
+- FastAPI lifespan now starts exactly one scheduler task/session after `init_db()`, stores the task/stop event on `app.state`, then sets the stop event, cancels, awaits, and closes the scheduler session on shutdown.
+- `/health` remains independent of scheduler success; a lifecycle test with a deliberately failing scheduler task still returns `200 {"status":"ok"}` and shuts down cleanly.
+- Focused verification: `rtk uv run pytest -q tests/test_operations_scheduler.py tests/test_app_boot.py` -> `12 passed in 0.56s`.
+- Fresh full suite: `322 passed in 14.58s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 5 implementation commit: `bc0132d` — `feat: add lightweight operations scheduler`.
+- Next Phase 5 task: Task 6 — Command Center, Incidents UI, and Analytics Drill-Down.
+
+### Task 6 — Command Center, Incidents UI, and Analytics Drill-Down COMPLETE
+
+- Task 6 started from clean HEAD `132c477`; fresh baseline: `rtk uv run pytest -q` -> `322 passed in 14.45s`.
+- Initial RED: `rtk uv run pytest -q tests/test_operations_admin.py` -> 8 failed, covering the missing Command Center, shared incident rendering, Analytics drill-down, system status, Bot health summary, Incidents UI/acknowledgement, real conversation filtering, and Phase 5 navigation.
+- Replaced the effective `/` root with a new Command Center router registered before the legacy router, preserving legacy compatibility routes without deleting them in Phase 5.
+- Command Center shows deterministic system status, fleet counts, channel evidence, Knowledge Service health, today's conversations, human queue, open incidents, Needs Attention cards with direct source actions, and compact Bot fleet rows.
+- Needs Attention is ordered Critical before Warning/Info; one shared Knowledge Service incident renders once with all affected Bot names.
+- System status is `Critical` when a critical incident is global or affects an active Bot; otherwise active incidents produce `Degraded`. A further regression guard ensures an active Bot with only configured/ready channel evidence is also `Degraded`, not `Healthy`, because Task 2 established that channel configuration/recent traffic is not active health proof.
+- Added `/incidents` filters for severity/status/source, `/incidents/<id>` detail with timeline/source/affected Bots/recovery state, and CSRF-protected acknowledgement.
+- Added `/analytics` with server-rendered Operations and Quality sections. Every metric uses the drill-down URL returned by `MetricService`; no decorative chart or client chart dependency was added.
+- Extended `/conversations` to honor the existing MetricService drill-down contract: `bot_id`, `decision`, `from`, and `to`. `decision=knowledge_error` maps to `knowledge_*` decision errors; other decisions match `BotDecision.decision_type`.
+- Bot Overview now shows compact Operational health, Channel evidence, live Knowledge dependency, Activity today, active incident count, and Bot-scoped Analytics link; it does not embed global analytics/BI charts.
+- Bot workspace navigation now includes a Bot-scoped Analytics link.
+- Approved global navigation is now: Command Center, Bots, Conversations, Knowledge Services, Analytics, Incidents. No empty User/System Settings pages were added.
+- Compatibility regression found by first full suite: legacy `test_dashboard_uses_saved_channel_config_state` expected `LINE` and `Configured` at `/`. Fixed by rendering compact `channel_cards` evidence in Command Center; targeted compatibility + Task 6 tests -> `9 passed in 1.17s`.
+- Health-invariant regression: exact-node RED `test_system_status_is_degraded_when_active_channel_health_is_unverified` failed because Command Center showed Healthy; fixed to Degraded. (An earlier `-k unverified_active_channel` command selected no tests; it was only a command-selection mistake.) Final Task 6 suite -> `9 passed in 1.36s`.
+- Final required cross-surface verification: `rtk uv run pytest -q tests/test_operations_admin.py tests/test_bot_admin.py tests/test_conversations_admin.py` -> `35 passed in 3.94s`.
+- Fresh full suite: `331 passed in 16.75s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 6 implementation commit: `ccaeadf` — `feat: add chatbot operations command center`.
+- Next Phase 5 task: Task 7 — Phase 5 Verification and Incident/Alert Manual Checkpoint.
+
+### Task 7 — Phase 5 Verification and Incident/Alert Manual Checkpoint COMPLETE
+
+- Task 7 started from clean HEAD `c29ec9f` with no source changes required.
+- Prescribed focused verification: `rtk uv run pytest -q tests/test_health_service.py tests/test_incident_service.py tests/test_metrics_service.py tests/test_alert_service.py tests/test_operations_scheduler.py tests/test_operations_admin.py` -> `40 passed in 2.83s`.
+- Fresh full suite: `331 passed in 17.93s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` -> exit 0.
+- Operational thresholds verified: warning persistence `15 min`; alert cooldown `15 min`; human-wait warning/critical `10/30 min`; RAG retrieval-latency warning/critical `3000/8000 ms`.
+- Alert destination probe was intentionally boolean-only and exposed no secret values. Current environment: operational Telegram token **not configured**, operational Telegram chat **not configured**, dashboard local.
+- Because no operational Telegram destination is configured, the checkpoint used the production `TelegramAlertService` with `respx`-mocked Telegram HTTP plus a mocked Knowledge Service endpoint. This exercised the real alert policy/sender code without sending an external message or recording any token.
+- Shared Knowledge Service outage checkpoint: one critical root incident **ID 1**, affected Bot IDs `[1, 2, 3]`, one initial mocked Telegram call; duplicate poll remained at one call.
+- Recovery checkpoint: restoring Knowledge Service health resolved the same incident **ID 1** with a recovery timestamp; one recovery notification raised mocked Telegram call count to two; duplicate recovery remained at two.
+- Warning persistence checkpoint: a human-queue conversation beyond the 10-minute warning SLA created warning incident **ID 2** immediately while Telegram call count remained unchanged. After the incident was made older than the 15-minute warning-persistence threshold, exactly one warning notification was emitted; immediate duplicate was suppressed by policy/cooldown.
+- Targeted HTTP/UI checkpoint: five route tests passed in `1.11s`, covering Needs Attention -> Inbox/source actions, one shared incident card with affected Bots, fallback Analytics drill-down URL, actual filtered conversation results, and incident detail/acknowledgement.
+- Plan/spec reconciliation: Task 7's phrase `force warning-only fallback-rate threshold` has no matching approved fallback percentage threshold in the authoritative spec; fallback rate is defined only as a metric. Consistent with Task 5, no percentage threshold was invented. Warning-to-Telegram persistence was validated with the approved human-queue warning incident instead.
+- Phase 5 Operations Monitoring is complete locally. No push, merge, deploy, main-branch modification, or real Telegram delivery was performed.
+- Next plan: `docs/superpowers/plans/2026-09-13-phase-6-multi-user-hardening-cleanup.md` — Phase 6 Multi-User Hardening and Legacy Cleanup.
+
+## Phase 6 — Multi-User Hardening and Legacy Cleanup
+
+### Task 1 — User, Bot Access, and Audit Models COMPLETE
+
+- Task 1 started from clean HEAD `61661b5`; fresh baseline: `rtk uv run pytest -q` -> `331 passed in 23.67s`.
+- Loaded the Phase 6 plan with Superpowers executing-plans and kept the existing linked worktree/branch; no new worktree was created.
+- RED: `rtk uv run pytest -q tests/test_users.py tests/test_audit.py` failed during collection because `User`, `UserBotAccess`, and `AuditEvent` did not yet exist.
+- Added additive SQLModel tables `User`, `UserBotAccess`, and `AuditEvent` in `models.py`.
+- `User.email` is indexed and unique; a duplicate-email regression test verifies the database constraint with `IntegrityError`.
+- `UserBotAccess` persists `user_id` / `bot_id` mappings but intentionally has no composite DB unique constraint in Task 1. The approved plan assigns duplicate enforcement to the later access service to avoid a risky SQLite retrofit constraint.
+- `AuditEvent` persists actor user, action, object type/id, optional Bot, summary, before/after JSON, request metadata JSON, and indexed creation timestamp.
+- These are new tables, so existing SQLite installations receive them through `SQLModel.metadata.create_all()`; no ALTER migration helper was added.
+- No owner bootstrap, password hashing, session-token migration, role validation, authorization service, or audit-writing service was implemented ahead of later Phase 6 tasks.
+- Focused verification: `rtk uv run pytest -q tests/test_users.py tests/test_audit.py` -> `3 passed in 0.43s`.
+- Fresh full suite: `334 passed in 16.80s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 1 implementation commit: `4d2fab2` — `feat: add users bot access and audit models`.
+- Next Phase 6 task: Task 2 — Bootstrap Owner and Replace Environment-Only Authentication.
+
+### Task 2 — Bootstrap Owner and Replace Environment-Only Authentication COMPLETE
+
+- Task 2 started from clean HEAD `b082b3f`.
+- RED: `rtk uv run pytest -q tests/test_users.py tests/test_session_security.py` failed during collection because `chatbot_manager.auth` and `read_session_user_id` did not yet exist.
+- Added `auth/service.py` using the already-installed `pwdlib` recommended Argon2 hasher.
+- `bootstrap_owner(session)` creates the first persisted active Owner only when the User table is empty, normalizes `ADMIN_EMAIL`, hashes `ADMIN_PASSWORD`, and never stores plaintext credentials. Repeated bootstrap calls return the existing first user without resetting credentials.
+- `authenticate_user()` normalizes email case/whitespace and rejects unknown, wrong-password, and inactive users. `load_active_user()` resolves active persisted sessions by user ID.
+- `init_db()` now bootstraps the first Owner after default Bot creation and legacy channel migration.
+- Session tokens migrated from email payloads to `user_id` using salt `admin-session-v2`; old `admin-session` email tokens are deliberately invalid and require a fresh login.
+- The Task 2 plan's abbreviated file list omitted the live integration points. Minimal required integration was added to `admin/routes.py` and `admin/dependencies.py`: `/login` now authenticates against persisted Users and writes a user-ID token; `require_admin` reads that token, loads an active User, and returns the email string expected by existing routes/templates.
+- This email-returning `require_admin` is intentionally transitional. Task 3 owns the `CurrentUser`/role/Bot-scope authorization refactor.
+- Existing email-bound CSRF tokens remain unchanged in Task 2 so current forms keep working; the session itself is now database-backed and inactive users lose access immediately.
+- Added integration coverage proving a separately persisted `admin` user can log in even though that email/password does not exist in environment settings.
+- Focused verification: `rtk uv run pytest -q tests/test_users.py tests/test_session_security.py` -> `11 passed in 1.14s`.
+- Broader auth/admin verification: `rtk uv run pytest -q tests/test_admin_routes.py tests/test_app_boot.py tests/test_session_security.py tests/test_users.py` -> `43 passed in 6.42s`.
+- Fresh full suite: `338 passed in 34.23s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 2 implementation commit: `6eed6d5` — `feat: add database backed user authentication`.
+- Next Phase 6 task: Task 3 — Enforce Role and Bot-Scope Authorization Server-Side.
+
+### Task 3 — Enforce Role and Bot-Scope Authorization Server-Side COMPLETE
+
+- Task 3 started from clean HEAD `38a6cac`; the immediately preceding full suite at that state was `338 passed`.
+- Initial authorization RED, after correcting one test-only unique-email collision, was `6 failed, 3 passed`; failures were exactly the missing unassigned Bot/conversation direct-URL gates, Bot mutation gate, Bot list filtering, Bot-scoped Analytics gate, and global admin-surface gate.
+- Added `auth/authorization.py` with `CurrentUser(id, email, role, allowed_bot_ids)`, `require_current_user`, `require_role`, `can_manage_bot`, and `require_bot_access`.
+- Operators load explicit `UserBotAccess` rows into `allowed_bot_ids`; Owner/Admin use the documented empty-set sentinel because their roles grant global Bot visibility.
+- Bot-specific routes share one server-side path dependency: path `bot_id` is authorized against the persisted Bot; every non-GET Bot/test route is Owner/Admin only. `/bots` list itself is filtered to assigned Bots for Operators.
+- Conversation-specific routes share one server-side dependency that loads the Conversation from the DB and derives its `bot_id`; client query/path Bot IDs are never trusted as the authorization source. Operator conversation lists are also filtered to assigned Bots.
+- Operators can use assigned-Bot Inbox read/take/reply/return/close/note flows and assigned-Bot Analytics read-only. Add-to-test-suite and explicit conversation assignment remain manager-only because those actions are outside the approved Operator action list.
+- `/analytics` requires an explicit assigned `bot_id` for Operators; global Analytics and unassigned Bot Analytics return 403.
+- Knowledge Services, Incidents, Command Center, and legacy global administrative routes are Owner/Admin only.
+- Task 3's sample expects Admin `/users` -> 403, but the actual `/users` route is intentionally created in Task 4. No placeholder Users page was added; Task 3 provides the Owner-only `require_role("owner")` dependency for the real Task 4 route.
+- CSRF remains signed against the authenticated persisted User email. Authorization decisions use only `CurrentUser.id`, role, and Bot assignments; keeping the existing email-bound form token avoids rewriting roughly 40 forms and remains database-user-bound.
+- Authorization suite: `rtk uv run pytest -q tests/test_authorization.py` -> `9 passed in 2.82s`.
+- Required focused verification: `rtk uv run pytest -q tests/test_authorization.py tests/test_admin_routes.py tests/test_csrf_security.py tests/test_session_security.py tests/test_conversations_admin.py tests/test_test_center_admin.py` -> `61 passed in 12.11s`.
+- Fresh full suite: `347 passed in 38.87s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 3 implementation commit: `8c09181` — `feat: enforce role and bot scoped authorization`.
+- Next Phase 6 task: Task 4 — Add Owner User Management and Bot Assignment UI.
+
+### Task 4 — Add Owner User Management and Bot Assignment UI COMPLETE
+
+- Task 4 started from clean HEAD `4b75c93`.
+- RED: `rtk uv run pytest -q tests/test_user_admin.py` -> `9 failed`; every failure was the expected missing `/users` route/navigation behavior.
+- Added Owner-only `GET /users`, `POST /users`, `POST /users/{id}/update`, `POST /users/{id}/password`, and `POST /users/{id}/bots`.
+- The entire Users router is protected with `require_role("owner")`; Admin and Operator direct URLs return `403` even if navigation is hidden.
+- User creation normalizes email to lowercase, rejects duplicate email/invalid role, and hashes passwords with the existing recommended Argon2 hasher. Plaintext passwords and password hashes are never rendered after POST.
+- Role/active updates reject removal, demotion, or deactivation of the last active Owner with `400 last_active_owner`. The change is allowed when another active Owner remains.
+- Operator Bot access uses exact replacement semantics. Duplicate submitted IDs collapse naturally, nonexistent Bot IDs are rejected, and stale `UserBotAccess` rows are cleared whenever the user changes away from Operator.
+- Password reset replaces the stored hash only and redirects; the submitted password never appears in the response body.
+- Added the server-rendered Users administration page showing email, role, active state, and assigned Bot names only—never password hashes.
+- `require_current_user()` now stores the authenticated `CurrentUser` on `request.state`; `base.html` uses that state to show `Administration → Users` only for Owners without changing every route/template context.
+- Added minimal `.nav-section` styling so the Administration label is readable in the existing dark sidebar.
+- Focused verification after final UI styling: `rtk uv run pytest -q tests/test_user_admin.py tests/test_authorization.py` -> `19 passed in 6.17s`.
+- Fresh full suite from the exact commit candidate: `357 passed in 40.75s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --cached --check` -> exit 0.
+- Task 4 implementation commit: `5587e85` — `feat: add owner user administration`.
+- Next Phase 6 task: Task 5 — Add Sanitized Audit Service and Audit UI.
+
+### Task 5 — Add Sanitized Audit Service and Audit UI COMPLETE
+
+- Task 5 started from clean HEAD `4be827d`.
+- RED: `rtk uv run pytest -q tests/test_audit.py` failed during collection because `chatbot_manager.audit` did not yet exist.
+- Added `audit.py` with `sanitize_audit_value()` and `record_audit()`.
+- Sanitization is recursive through dictionaries/lists/tuples and case-folds keys before checking the approved sensitive-key set. Sensitive values become `[REDACTED]`; ordinary opaque strings are not regex-rewritten.
+- `record_audit()` persists actor user ID, action, object type/id, optional Bot ID, summary, sanitized before/after JSON, sanitized request metadata JSON, and timestamp using the existing `AuditEvent` model.
+- Added Owner/Admin `GET /audit` with filters for action, actor email, Bot, from date, and to date. Operators receive `403`. Administration navigation now shows Audit to Owner/Admin and Users only to Owner.
+- Audit UI renders actor email, action, target, summary, timestamp, and sanitized before/after expanders.
+- Instrumented successful existing mutation families: `bot.publish`, `bot.pause`, `bot.resume`; `knowledge.create`, `knowledge.update`, `knowledge.credential_replace`, `knowledge.disable`; `user.create`, `user.update`, `user.password_reset`, `user.bot_access`; `conversation.assign`, `conversation.take`, `conversation.return_to_bot`, `conversation.close`; and `incident.acknowledge`.
+- Conversation audit snapshots contain only IDs/state/assignment transitions; no user message, operator reply, internal-note, or close-reason text is copied into audit rows.
+- Knowledge/user callers never pass raw API keys or passwords into audit snapshots. The sanitizer test separately proves nested `api_key`, mixed-case `Authorization`, and mixed-case `bot_token` values are redacted.
+- Representative integration test exercises real admin routes (with only publish external work faked) and proves required audit actions exist while submitted password/API-key values and conversation external-user identifier are absent from serialized audit JSON.
+- Sequencing note: `bot.archive` does not exist yet. Task 6 introduces archive/retention and must record `bot.archive` there rather than inventing an archive route in Task 5.
+- Audit suite: `rtk uv run pytest -q tests/test_audit.py` -> `6 passed in 1.64s`.
+- Cross-surface focused verification across audit/authorization/users/Bots/Test Center/Knowledge/Conversations/Operations -> `74 passed in 17.96s`.
+- Fresh full suite: `362 passed in 42.47s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 5 implementation commit: `1aab64c` — `feat: add sanitized administrative audit trail`.
+- Next Phase 6 task: Task 6 — Add Archive and Retention Controls.
+
+### Task 6 — Add Archive and Retention Controls COMPLETE
+
+- Task 6 started from clean HEAD `20aec03`.
+- RED: `rtk uv run pytest -q tests/test_retention.py` failed during collection because `chatbot_manager.retention` did not yet exist.
+- Added `RetentionService`, `RetentionResult`, and stable `RetentionError` codes.
+- `archive_bot()` requires lifecycle `paused`; active/draft/ready/archive attempts fail with `bot_must_be_paused`. Successful archive sets `lifecycle_status="archived"`, disables all associated ChannelConnections, and preserves config versions, conversations, test cases/runs/results, and prior audit rows.
+- Archive now records the Task 5 deferred `bot.archive` audit event with status transition and disabled-channel count only.
+- Added `POST /bots/{id}/archive`; the Bot Lifecycle UI offers Archive only while paused. Direct archive attempts against non-paused Bots return `409`.
+- `remove_knowledge_service()` rejects any Knowledge Service referenced by any `BotConfigVersion`, including historical published/draft versions, with `knowledge_service_in_use`.
+- Added `disable_knowledge_service()` plus `POST /knowledge-services/{id}/disable`; the normal UI offers Disable and preserves the service/credential/history rather than hard deleting it.
+- Closed-conversation purge uses `closed_at` and deletes child `BotDecision` rows by message IDs, then messages and handoff events, then parent conversations in the same transaction. Open/non-closed conversations are never eligible regardless of age.
+- Incident purge removes only resolved incidents older than the threshold using `resolved_at`; open/acknowledged incidents remain.
+- Audit purge removes only audit rows older than its independent threshold and immediately creates one fresh `retention.audit` event containing counts/threshold only.
+- Conversation and incident purges similarly record one count-only audit row; no message, incident detail, or prior audit payload content is copied into retention audit entries.
+- Nonpositive retention windows are rejected with `retention_days_must_be_positive`.
+- Added settings and `.env.example` defaults: `CONVERSATION_RETENTION_DAYS=365`, `INCIDENT_RETENTION_DAYS=730`, `AUDIT_RETENTION_DAYS=1095`.
+- No automatic destructive scheduler was added. Retention purges remain explicit service maintenance operations so policy can be validated before automation.
+- `rtk uv run pytest -q tests/test_retention.py tests/test_audit.py` -> `15 passed in 2.77s`.
+- Wider focused verification across retention/audit/Bot lifecycle/Knowledge Services/authorization/users/app boot -> `65 passed in 16.12s`.
+- Fresh full suite: `371 passed in 49.05s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 6 implementation commit: `de0805b` — `feat: add archive and retention controls`.
+- Next Phase 6 task: Task 7 — Complete Credential and Redaction Hardening.
+
+### Task 7 — Complete Credential and Redaction Hardening COMPLETE
+
+- Task 7 started from clean HEAD `42f6422`.
+- Added cross-layer secret sentinel tests first. Initial run across `test_redaction_boundaries.py`, secret encryption, and failure handling -> `1 failed, 10 passed`.
+- The RED exposed a real persistence leak: `BotRuntime` accepted any `KnowledgeServiceError` string beginning with `knowledge_`; a crafted/upstream-derived `knowledge_service_unavailable:<secret>` therefore reached `RuntimeResult.error_code` and durable `BotDecision.error_code` unchanged.
+- `KnowledgeServiceError` now owns a finite `SAFE_KNOWLEDGE_ERROR_CODES` set. Constructor input outside that exact set becomes `knowledge_service_error`; the exception stores the normalized value as `.code` and its string representation is therefore also stable.
+- `BotRuntime` and Knowledge Service retrieval admin now consume `exc.code` rather than using `str(exc)` as external-error control flow.
+- Provider delivery required no production rewrite: `DeliveryService` already logs only provider/connection ID/exception class and returns `provider_delivery_failed`. A real operator-reply test now injects an exception containing `channel-secret-sentinel` and proves the sentinel is absent from rendered conversation HTML, logs, message metadata, and audit rows.
+- LightRAG transport handling also required no rewrite: `httpx.RequestError` was already mapped to stable Knowledge health/query codes. A real Knowledge Service connection test now injects a transport exception containing the configured API-key sentinel and proves it is absent from redirect/page/audit/log surfaces.
+- Active Bot channel credential storage/read was already on the common Credential model. Added regression coverage for `POST /bots/1/channels/line` proving raw secrets are absent from `Credential.encrypted_payload` and `ChannelConnection.metadata_json`, while `resolve_connection_credentials()` returns the decrypted values for runtime use.
+- Added an explicit no-fallback regression: when a legacy `Channel` contains credentials but an active `ChannelConnection` has no `credential_id`, `resolve_connection_credentials()` returns `{}` rather than consulting legacy Channel/environment values.
+- Source boundary check: active Bot runtime/provider webhook/readiness paths call `resolve_connection_credentials()` and Bot-scoped admin uses `read_credential()`. Remaining `channel_credentials()` references are the legacy global `/channels` routes and legacy `_notify_admin` compatibility path only.
+- Deliberate sequencing: those legacy single-assistant compatibility routes are not replatformed immediately before deletion. Task 8 performs dependency proof and removes the obsolete global/single-assistant paths; `channel_config.py` remains only for that compatibility/migration window.
+- Security-focused verification after the fix: `rtk uv run pytest -q tests/test_redaction_boundaries.py tests/test_secret_encryption.py tests/test_failure_handling.py tests/test_knowledge_client.py tests/test_bot_runtime.py tests/test_webhook_security.py` -> `31 passed in 3.55s`.
+- Fresh full suite: `376 passed in 52.27s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 175 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Task 7 implementation commit: `dab4ad0` — `security: harden credential and redaction boundaries`.
+- Next Phase 6 task: Task 8 — Remove Obsolete Single-Assistant and Local-RAG Product Paths.
+
+### Task 8 — Remove Obsolete Single-Assistant and Local-RAG Product Paths COMPLETE
+
+- Task 8 started from clean HEAD `77e429d`.
+- Dependency proof was captured before deletion with the two plan-required repository searches.
+- Classification before deletion:
+  - **Active replacements:** Knowledge Services (`/knowledge-services`), Bot Knowledge (`/bots/{id}/knowledge`), Bot Rules (`/bots/{id}/rules`), modern Conversation/Message/Decision runtime, and Bot-scoped ChannelConnection/Credential flows.
+  - **Obsolete:** global `/assistant`, `/rules`, `/channels`, `/test-chat`, `/logs`, `/knowledge`, `/knowledge-graph`; local knowledge document/graph APIs; `admin/routes.py`; `channel_config.py`; legacy single-assistant `chatbot` engine; in-process `rag/service.py`; local upload/reindex/delete UI; legacy Tailscale Telegram setup helper.
+  - **Migration/history-only and retained:** `AssistantSettings`, `Rule`, `Channel`, `ChatEvent`, and `KnowledgeDocument` model/table data. Full historical transformation/drop safety was not proven, so these tables were not deleted.
+- Final-surface tests were added before cleanup. Initial RED: `4 failed, 1 passed`—legacy routes/APIs still existed, production still imported in-process RAG, and legacy templates remained.
+- Extracted database-backed login/logout to `admin/auth.py`, then removed the old catch-all legacy admin router.
+- Moved provider definitions to `channel_definitions.py`; removed `channel_config.py`. `channel_connections.py` retains only the startup migration decoder needed to transform legacy `Channel` credentials into encrypted common `Credential` rows and `ChannelConnection` records.
+- Removed legacy single-assistant `chatbot` runtime after moving the shared normalization/rule-match helpers into `runtime/engine.py`.
+- Removed the in-process RAG package (`rag/service.py`, `rag/__init__.py`) and all local knowledge upload/reindex/delete/graph routes/templates.
+- Removed global Channels/dashboard/single-assistant templates: `assistant.html`, `channels.html`, `dashboard.html`, `knowledge.html`, `knowledge_graph.html`, `logs.html`, `rules.html`, `test_chat.html`.
+- Production webhooks no longer write compatibility `ChatEvent` rows. Live records are `Conversation`, `ConversationMessage`, and `BotDecision` only. Provider delivery errors remain observable through safe `ConversationMessage.metadata_json.error_code`.
+- Historical `ChatEvent` and `KnowledgeDocument` rows remain untouched for data preservation; no destructive table migration/drop was attempted.
+- Removed unused global environment channel/LLM/RAG configuration fields and corresponding `.env.example` entries. Operations Telegram alert credentials remain separate and active.
+- Removed `raganything` and `python-telegram-bot` only after source searches proved there were no remaining consumers. `uv.lock` resolved package count dropped from 175 to 45.
+- Removed the now-unreachable `admin/telegram_ops.py` and obsolete test-only compatibility helpers.
+- Consolidated provider/webhook tests around final keyed Bot connections and common encrypted `Credential` storage; legacy startup migration coverage remains.
+- Final focused verification across cleanup/auth/webhooks/runtime/migration/redaction/CSRF/alerts/settings -> `51 passed in 6.06s`.
+- Fresh full suite from the exact candidate -> `254 passed in 30.02s`.
+- `rtk uv run python -m compileall -q apps/api` -> exit 0.
+- `rtk uv lock --check` -> exit 0 (`Resolved 45 packages`).
+- `git diff --check` and staged diff check -> exit 0.
+- Final dependency scans: no `raganything`, `python-telegram-bot`, `rag_service_from_assistant`, `RagAnythingService`, `channel_config`, old admin router, old chatbot engine, `process_messages`, or `_notify_admin` production/test consumers remain. Obsolete route decorator scan returned no matches.
+- Broad plan search still matches retained migration/history model names and modern Bot/Knowledge replacement URLs, plus negative cleanup-test assertions; these are intentional.
+- Task 8 implementation commit: `f2da66c` — `refactor: retire legacy single assistant rag paths`.
+- Next Phase 6 task: Task 9 — Final Redesign Verification, Manual Role Check, and Handoff.
+
+### Task 9 — Final Redesign Verification, Manual Role Check, and Handoff COMPLETE
+
+- Task 9 started from clean implementation HEAD `80aba5d` with only final documentation changes planned.
+- Final operating documentation was rewritten to describe only the surviving product surface and responsibility split. README/operations no longer instruct admins to use local knowledge upload/reindex/graph, local RAG parser/model settings, CIFS-managed Tailscale/Telegram webhook automation, or local RAG/upload backups.
+- Final product surface:
+  - Command Center: `/`
+  - Bots: `/bots`; Bot workspace includes Setup, Behavior/Rules, Knowledge binding, Channels, Test, Conversations, Analytics, and Versions
+  - Unified Inbox/Handoff: `/conversations`
+  - External Knowledge Service registry/test: `/knowledge-services`
+  - Analytics: `/analytics`
+  - Incidents: `/incidents`
+  - Owner/Admin Audit: `/audit`
+  - Owner-only Users: `/users`
+  - New provider deployments use keyed webhooks: `/webhooks/{provider}/{webhook_key}` (Messenger uses GET for verification and POST for events)
+- Final architecture boundary:
+  - CIFS owns Bot configuration/versioning, channels/credentials, runtime decisions, conversations/handoff, testing/publishing, operations/analytics/incidents, users/roles/audit, archive, and retention.
+  - External LightRAG-compatible services own documents, ingestion/parsing, indexing, vector/graph state, retrieval implementation, WebUI, external model/provider configuration, and their own backup/restore lifecycle.
+- Six-phase redesign lineage/key commits:
+  1. **Phase 1 Bot Foundation:** `64a02eb` models, `c651bd6` Default Bot migration, `d6f0957` Bot routes, `38cea08` Bot workspace UI.
+  2. **Phase 2 External Knowledge Service:** `543bb6d` encrypted credentials, `620ff46` external LightRAG client, `6b9f607` Knowledge Service registry, `f00fbdc` Bot binding, `5cf0277` external-knowledge navigation boundary; completed head feeding Phase 3: `70c1738`.
+  3. **Phase 3 Runtime/Conversations:** `d81b111` ChannelConnections, `7734686` provider identity, `3d0c701` conversations/decisions, `e8bd9c1` BotRuntime, `f85692e` handoff/delivery, `591c317` runtime webhooks, `7baeea7` Unified Inbox, `0b42625` compatibility snapshot fix; completed head `dfa4364`.
+  4. **Phase 4 Draft/Test/Publish:** `3bed305` version lifecycle, `36d2831` regression service, `9848378` readiness, `7b30dbb` publish gate, `81e0c48` Draft/setup UI, `f149c8d` Test/Publish Center, `0a41848` Bot-centric admin surface, `72b7be8` Bot-scoped channel correction; phase handoff `9422808`.
+  5. **Phase 5 Operations Monitoring:** `7406243` incidents, `786b650` health, `2c95546` metrics, `405ba4b` alert policy, `bc0132d` scheduler, `ccaeadf` Command Center/Incidents/Analytics; phase handoff `61661b5`.
+  6. **Phase 6 Multi-User Hardening/Cleanup:** `4d2fab2` user/access/audit models, `6eed6d5` DB auth, `8c09181` role/Bot authorization, `5587e85` Owner user admin, `1aab64c` sanitized audit, `de0805b` archive/retention, `dab4ad0` credential/redaction hardening, `f2da66c` legacy/local-RAG retirement; Task 8 handoff `80aba5d`.
+- External RAG validation in Task 9 used the real CIFS `LightRAGClient` contract against an isolated mocked HTTP endpoint (`/query`, `/health`). No authorized live external-RAG deployment/version is configured in this workspace, so no real external service/version success is claimed. The previously approved deployment floor from Phase 2 remains LightRAG `>=1.5.5`; production must record the exact deployed external RAG version during real smoke validation.
+- Prescribed focused security/role verification: `48 passed in 9.52s`, 0 failures; no warnings were printed.
+- Explicit isolated three-user HTTP authorization checkpoint:
+  - **Owner:** `/`, `/users`, `/audit`, `/bots`, `/conversations`, `/knowledge-services`, `/analytics`, `/incidents` all returned 200.
+  - **Admin:** Bots, Knowledge Services, Analytics, Incidents, and Audit returned 200; `/users` returned 403.
+  - **Operator assigned Bot A:** assigned Bot/conversation/Analytics returned 200; Bot B direct URL, Bot B Analytics, global Analytics, Knowledge Services, Incidents, and publish returned 403.
+- Explicit isolated end-to-end checkpoint PASS using real CIFS routes/runtime/persistence/publish/scheduler and mocked only external HTTP boundaries:
+  - provider LINE message -> BotRuntime -> LightRAGClient -> grounded provider reply: PASS, 2 RAG queries across initial/resumed runtime.
+  - escalation -> Needs Human -> Operator Take -> `human_active`: PASS.
+  - inbound while human-active persisted with zero Bot reply: PASS.
+  - operator human reply used LINE push delivery -> Return to Bot -> next inbound resumed Bot/RAG: PASS.
+  - Draft edit -> saved regression -> PublishService -> Live pointer switched -> next provider message used the new Live rule and returned `Published v2`: PASS.
+  - simulated external Knowledge health failure -> one critical `knowledge_service_unavailable` incident -> alert policy eligible -> recovery health -> same incident resolved -> recovery alert eligible: PASS.
+- Fresh full suite after final docs update: `254 passed in 29.59s`, 0 failures; no warnings were printed.
+- Compile verification: `rtk uv run python -m compileall -q apps/api` -> exit 0. The plan's literal `rtk python -m compileall ...` wrapper form is unsupported in this workspace and returned exit 127; the project-supported uv-run Python equivalent passed.
+- `rtk uv lock --check` -> exit 0, `Resolved 45 packages`.
+- `git diff --check` -> exit 0.
+- Final scans:
+  - legacy-type search matches only retained migration/history `AssistantSettings` / `KnowledgeDocument` models, migration code, their preservation tests, and negative cleanup-test assertions; no active local-RAG runtime dependency remains.
+  - `raganything` search across apps/tests/pyproject returned no matches.
+  - secret-name search matched structured credential fields, encrypted credential consumers, password inputs, provider adapters, operations alert settings, and the audit redaction list. A logger-specific secret-name scan returned no matches; no hard-coded production secret or unsafe secret logging was found.
+- Retention/archive defaults and behavior:
+  - closed conversations: 365 days
+  - resolved incidents: 730 days
+  - audit: 1095 days
+  - purges remain explicit maintenance actions, not an automatic destructive scheduler
+  - archive requires a paused Bot, disables its ChannelConnections, and preserves versions/conversations/tests/audit history
+- Backup responsibility:
+  - CIFS: SQLite database, deployment secrets, public-routing/reverse-proxy configuration, and the deployed CIFS revision.
+  - External RAG: document sources, index/vector/graph state, external service/model/provider configuration, credentials, and external RAG version.
+- Remaining non-goals/deferred production checks:
+  - no real provider message was sent in Task 9;
+  - no real external-RAG endpoint/version was available;
+  - no real Telegram operations alert was sent;
+  - no production backup/restore rehearsal was performed;
+  - no push, PR, merge, deploy, or `main` modification was performed.
+- Git state before the final Task 9 docs commit: only `README.md`, `docs/operations.md`, and this `HANDOFF.md` are intentional changes. The feature branch has no upstream tracking ref. Compared with `origin/main`, the pre-final-docs HEAD is **0 behind / 65 ahead**; the final docs commit will advance the ahead count by one.
+- Exact next operational action: configure an authorized external LightRAG deployment (record exact version, meeting the approved floor), public HTTPS routing and provider keyed webhook URLs; then execute the production smoke checklist (real provider inbound/reply, real RAG retrieval, handoff/return, Draft publish, controlled incident/recovery, and CIFS/external-RAG backup/restore rehearsal). After that evidence is recorded, explicitly decide whether to push/open a PR/merge this local feature branch.
+
+## Post-Redesign Migration and Deployment Rehearsal — 2026-10-07
+
+- Continued after final redesign commit `e34cc09` without modifying `main`, pushing, merging, or deploying persistent production state.
+- **Legacy-database migration rehearsal PASS** using a temporary copy of the real development database at `/tmp/cifs-final-migration-rehearsal.sqlite3`; the source database SHA-256 was unchanged before/after the rehearsal.
+- Final startup migration created exactly one Default Bot, one published Live configuration with the migrated rule, one Owner user, one Bot-scoped Telegram `ChannelConnection`, and one common encrypted `Credential`.
+- Legacy history remained intact in the migrated copy: 1 legacy Channel, 1 legacy Rule, 31 ChatEvents, and 2 KnowledgeDocuments.
+- Migrated Telegram credential round-trip proved the common Credential API can decrypt the migrated fields while the encrypted payload contains no plaintext credential values. The legacy token is valid against Telegram `getMe`; Telegram currently has **no webhook registered**, no pending updates, and no reported webhook error.
+- Migration readiness exposed one real deployment gap: the legacy Telegram credential had an empty `webhook_secret`. A strong secret was generated **only in the temporary migrated database** for the smoke; the source database/legacy credential were not changed.
+- The existing LightRAG source checkout at `/home/srikaewa/Data-II/Projects/LightRAG` reports core `1.4.9.8`, below the approved `>=1.5.5` floor, and had pre-existing `docker-compose.yml` modification plus untracked `env`. Those pre-existing changes were preserved.
+- Pulled and verified pinned image `ghcr.io/hkuds/lightrag:v1.5.7` (image digest `sha256:5bdbd524931b011df246fe20888d110cef691e6804c12cde636a2b746d7de27e`); the container reports core version `1.5.7`.
+- Ran v1.5.7 in a fully isolated Docker network with fresh PostgreSQL/Qdrant/LightRAG volumes and fresh smoke API key, reusing only the existing LLM/embedding provider configuration. No existing RAG storage was mounted or modified.
+- Real v1.5.7 `/health` -> HTTP 200 / `healthy`; synthetic document ingestion completed `processed` with no indexing error.
+- **Real external-RAG compatibility PASS:** CIFS production `LightRAGClient` queried the isolated v1.5.7 service, retrieved synthetic code `ORCHID-7429`, and received 1 reference. First direct client query latency was ~4198 ms (warning-range against the current 3000/8000 ms thresholds); a subsequent full BotRuntime query completed at ~2389 ms.
+- Temporary migrated Bot was bound to that real v1.5.7 service. Final readiness was: Bot profile PASS, behavior PASS, Knowledge Service PASS, channel readiness PASS; regression-presence remained WARNING because the migrated legacy Bot has no enabled saved regression case.
+- Started final CIFS on `127.0.0.1:18000` against the migrated copy. Local `/health` -> 200.
+- **Local keyed Telegram webhook PASS without sending a message:** a synthetic payload containing only `update_id` returned `200 {"processed":0}` with the valid temporary secret; invalid secret returned 403. No BotRuntime/provider-delivery path was triggered.
+- Existing Tailscale state before the smoke was preserved as the FamilyPortfolio tailnet-only root route proxying `127.0.0.1:8765`. CIFS used a separate temporary Funnel on HTTPS **8443** only; HTTPS 443 was never reconfigured.
+- **Public HTTPS ingress PASS:** temporary Funnel 8443 -> CIFS `/health` returned 200; the public keyed Telegram no-message request returned `200 {"processed":0}`; invalid secret returned 403.
+- Telegram provider registration was **not changed**, and no Telegram message was sent. The public smoke verified only HTTPS reachability plus keyed secret authentication.
+- Cleanup COMPLETE: Funnel 8443 disabled; temporary CIFS process stopped; all `cifs-rag-smoke` containers, Docker volumes, and network removed; temporary migrated DB and generated secret directory removed; port 18000 closed.
+- Post-cleanup Tailscale status again shows only the original FamilyPortfolio tailnet-only `/ -> 127.0.0.1:8765` route.
+- CIFS worktree returned clean. LightRAG worktree returned to its pre-smoke dirty state only: modified `docker-compose.yml` and untracked `env`; the accidental transient `uv.lock` rewrite from environment inspection was immediately restored.
+- This rehearsal does **not** constitute a persistent production deployment. Remaining production work is: provision the durable LightRAG `>=1.5.5` service/storage, migrate/configure the persistent CIFS database and secure environment, set a production Telegram webhook secret and register the final keyed HTTPS webhook URL, configure operations-alert credentials if desired, perform a real text-message/provider-reply smoke, and rehearse CIFS/external-RAG backup/restore.
+- After those deployment actions—or if deployment will be handled separately—the implementation branch is ready for an explicit integration decision: local merge, push/PR, or keep as-is.

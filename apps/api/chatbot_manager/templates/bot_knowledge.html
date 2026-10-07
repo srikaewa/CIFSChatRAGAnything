@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "_bot_workspace_header.html" %}
+
+{% if saved %}
+<p class="alert alert-success" role="status">Draft Knowledge Service binding saved.</p>
+{% elif error %}
+<p class="alert alert-error" role="alert">{{ error }}</p>
+{% endif %}
+
+<section class="grid" aria-label="Knowledge bindings">
+  <article class="panel">
+    <h2>Live binding</h2>
+    {% if live_service %}
+    <p><strong>{{ live_service.name }}</strong></p>
+    <p>Status: {{ live_service.health_status|replace('_', ' ')|title }}</p>
+    {% else %}
+    <p>Not configured.</p>
+    {% endif %}
+  </article>
+
+  <article class="panel">
+    <h2>Draft binding</h2>
+    {% if draft_service %}
+    <p><strong>{{ draft_service.name }}</strong></p>
+    <p>Status: {{ draft_service.health_status|replace('_', ' ')|title }}</p>
+    {% elif draft %}
+    <p>Draft v{{ draft.version_number }} has no Knowledge Service.</p>
+    {% else %}
+    <p>No Draft yet. Saving a binding will create one from Live.</p>
+    {% endif %}
+  </article>
+</section>
+
+<section class="panel bot-workspace-note">
+  <h2>Draft Knowledge Service</h2>
+  {% if services %}
+  <form class="form-grid" method="post" action="/bots/{{ bot.id }}/knowledge">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+    <label class="wide">Knowledge Service
+      <select name="knowledge_service_id" required>
+        {% for service in services %}
+        <option value="{{ service.id }}" {{ "selected" if selected_service and selected_service.id == service.id else "" }}>
+          {{ service.name }} · {{ service.health_status|replace('_', ' ')|title }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Save Draft Binding</button>
+  </form>
+  {% else %}
+  <p>No enabled Knowledge Services are registered. <a href="/knowledge-services">Add one in Knowledge Services</a>.</p>
+  {% endif %}
+</section>
+
+{% if selected_service %}
+<section class="panel bot-workspace-note">
+  <h2>Selected service</h2>
+  <p><strong>{{ selected_service.name }}</strong> · {{ selected_service.health_status|replace('_', ' ')|title }}</p>
+  <p><code>{{ selected_service.api_base_url }}</code></p>
+  <div class="panel-actions">
+    {% if selected_service.webui_url %}
+    <a class="action-btn" href="{{ selected_service.webui_url }}" target="_blank" rel="noopener noreferrer">Open RAG Manager</a>
+    {% endif %}
+    <a class="action-btn" href="/knowledge-services">Test Retrieval</a>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

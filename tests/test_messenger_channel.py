@@ -25,7 +25,8 @@ def test_messenger_parse_text_event() -> None:
                 "messaging": [
                     {
                         "sender": {"id": "user-1"},
-                        "message": {"text": "hello"},
+                        "timestamp": 1700000000000,
+                        "message": {"mid": "mid.1", "text": "hello"},
                     }
                 ]
             }
@@ -36,12 +37,15 @@ def test_messenger_parse_text_event() -> None:
 
     assert len(messages) == 1
     assert messages[0].provider == "messenger"
+    assert messages[0].external_message_id == "mid.1"
+    assert messages[0].timestamp_ms == 1700000000000
+    assert messages[0].attachments == []
     assert messages[0].external_user_id == "user-1"
     assert messages[0].text == "hello"
     assert messages[0].reply_context["recipient_id"] == "user-1"
 
 
-def test_messenger_ignores_non_text_events() -> None:
+def test_messenger_ignores_non_text_or_unidentified_events() -> None:
     adapter = MessengerAdapter(verify_token="verify", page_access_token="page-token", app_secret="")
     payload = {
         "entry": [
@@ -49,6 +53,7 @@ def test_messenger_ignores_non_text_events() -> None:
                 "messaging": [
                     {"sender": {"id": "user-1"}, "message": {"attachments": []}},
                     {"sender": {"id": "user-2"}, "delivery": {"mids": []}},
+                    {"sender": {"id": "user-3"}, "message": {"text": "missing stable id"}},
                 ]
             }
         ]

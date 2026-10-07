@@ -14,7 +14,10 @@ def login(client: TestClient) -> None:
     assert response.status_code == 303
 
 
-def rendered_csrf_token(client: TestClient, path: str = "/rules") -> str:
+def rendered_csrf_token(
+    client: TestClient,
+    path: str = "/bots/1/channels",
+) -> str:
     response = client.get(path)
     assert response.status_code == 200
     match = re.search(r'name="csrf_token" value="([^"]+)"', response.text)
@@ -30,28 +33,17 @@ def test_csrf_tokens_are_bound_to_the_authenticated_email() -> None:
     assert verify_csrf_token(f"{token}tampered", "admin@example.local") is False
 
 
-def test_authenticated_post_without_csrf_token_is_rejected(client: TestClient) -> None:
+def test_authenticated_post_without_csrf_token_is_rejected(
+    client: TestClient,
+) -> None:
     login(client)
 
     response = client.post(
-        "/rules",
-        data={"pattern": "price", "match_type": "contains", "reply_text": "Price is 100."},
-        follow_redirects=False,
-    )
-
-    assert response.status_code == 403
-
-
-def test_authenticated_post_with_foreign_csrf_token_is_rejected(client: TestClient) -> None:
-    login(client)
-
-    response = client.post(
-        "/rules",
+        "/bots/1/channels/line",
         data={
-            "csrf_token": make_csrf_token("other@example.local"),
-            "pattern": "price",
-            "match_type": "contains",
-            "reply_text": "Price is 100.",
+            "enabled": "on",
+            "channel_secret": "secret",
+            "channel_access_token": "token",
         },
         follow_redirects=False,
     )
@@ -59,17 +51,38 @@ def test_authenticated_post_with_foreign_csrf_token_is_rejected(client: TestClie
     assert response.status_code == 403
 
 
-def test_rendered_csrf_token_allows_authenticated_mutation(client: TestClient) -> None:
+def test_authenticated_post_with_foreign_csrf_token_is_rejected(
+    client: TestClient,
+) -> None:
+    login(client)
+
+    response = client.post(
+        "/bots/1/channels/line",
+        data={
+            "csrf_token": make_csrf_token("other@example.local"),
+            "enabled": "on",
+            "channel_secret": "secret",
+            "channel_access_token": "token",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403
+
+
+def test_rendered_csrf_token_allows_authenticated_mutation(
+    client: TestClient,
+) -> None:
     login(client)
     token = rendered_csrf_token(client)
 
     response = client.post(
-        "/rules",
+        "/bots/1/channels/line",
         data={
             "csrf_token": token,
-            "pattern": "price",
-            "match_type": "contains",
-            "reply_text": "Price is 100.",
+            "enabled": "on",
+            "channel_secret": "secret",
+            "channel_access_token": "token",
         },
         follow_redirects=False,
     )
@@ -77,10 +90,10 @@ def test_rendered_csrf_token_allows_authenticated_mutation(client: TestClient) -
     assert response.status_code == 303
 
 
-def test_all_admin_post_forms_render_csrf_tokens(client: TestClient) -> None:
+def test_final_admin_post_forms_render_csrf_tokens(client: TestClient) -> None:
     login(client)
 
-    for path in ("/", "/channels", "/rules", "/assistant", "/test-chat", "/knowledge"):
+    for path in ("/bots/1/channels", "/knowledge-services", "/users"):
         response = client.get(path)
         assert response.status_code == 200
         assert 'name="csrf_token"' in response.text

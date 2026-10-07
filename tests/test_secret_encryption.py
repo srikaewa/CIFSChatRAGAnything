@@ -1,12 +1,9 @@
-import json
-
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from chatbot_manager.channel_config import channel_credentials
+from chatbot_manager.channel_connections import resolve_connection_credentials
 from chatbot_manager.db import get_engine
-from chatbot_manager.models import AssistantSettings, Channel
-from chatbot_manager.rag.service import rag_service_from_assistant
+from chatbot_manager.models import ChannelConnection, Credential
 from chatbot_manager.security import decrypt_secret, encrypt_secret
 from chatbot_manager.settings import get_settings
 
@@ -35,96 +32,41 @@ def test_secret_encryption_round_trips_and_reads_legacy_plaintext() -> None:
     assert encrypt_secret("", key) == ""
 
 
-def test_channel_secrets_are_encrypted_at_rest_and_decrypted_for_use(client: TestClient) -> None:
+def test_bot_channel_secrets_use_common_encrypted_credential_only(
+    client: TestClient,
+) -> None:
     csrf_token = login(client)
 
     response = client.post(
-        "/channels/line",
+        "/bots/1/channels/line",
         data={
             "csrf_token": csrf_token,
             "enabled": "on",
-            "channel_secret": "line-secret-123",
-            "channel_access_token": "line-token-456",
+            "channel_secret": "active-line-secret",
+            "channel_access_token": "active-line-token",
         },
         follow_redirects=False,
     )
 
     assert response.status_code == 303
     with Session(get_engine()) as session:
-        channel = session.get(Channel, 1)
-        assert channel is not None
-        assert "line-secret-123" not in channel.credential_json
-        assert "line-token-456" not in channel.credential_json
-        stored = json.loads(channel.credential_json)
-        assert stored["channel_secret"].startswith("enc:v1:")
-        assert stored["channel_access_token"].startswith("enc:v1:")
-        assert channel_credentials(session, get_settings(), "line") == {
-            "channel_secret": "line-secret-123",
-            "channel_access_token": "line-token-456",
+        connection = session.exec(
+            select(ChannelConnection)
+            .where(ChannelConnection.bot_id == 1)
+            .where(ChannelConnection.provider == "line")
+        ).one()
+        assert connection.credential_id is not None
+        credential = session.get(Credential, connection.credential_id)
+        assert credential is not None
+        assert "active-line-secret" not in credential.encrypted_payload
+        assert "active-line-token" not in credential.encrypted_payload
+        assert "active-line-secret" not in connection.metadata_json
+        assert "active-line-token" not in connection.metadata_json
+        assert resolve_connection_credentials(session, connection) == {
+            "channel_secret": "active-line-secret",
+            "channel_access_token": "active-line-token",
         }
-
-
-def test_legacy_channel_secrets_are_rewritten_encrypted_on_next_save(client: TestClient) -> None:
-    with Session(get_engine()) as session:
-        session.add(
-            Channel(
-                provider="line",
-                enabled=True,
-                display_name="LINE",
-                credential_json=json.dumps(
-                    {"channel_secret": "legacy-secret", "channel_access_token": "legacy-token"}
-                ),
-            )
+        assert decrypt_secret(
+            credential.encrypted_payload,
+            get_settings().app_encryption_key,
         )
-        session.commit()
-
-    csrf_token = login(client)
-    response = client.post(
-        "/channels/line",
-        data={"csrf_token": csrf_token, "enabled": "on", "channel_secret": "", "channel_access_token": ""},
-        follow_redirects=False,
-    )
-
-    assert response.status_code == 303
-    with Session(get_engine()) as session:
-        channel = session.get(Channel, 1)
-        assert channel is not None
-        assert "legacy-secret" not in channel.credential_json
-        assert "legacy-token" not in channel.credential_json
-        assert channel_credentials(session, get_settings(), "line") == {
-            "channel_secret": "legacy-secret",
-            "channel_access_token": "legacy-token",
-        }
-
-
-def test_assistant_api_key_is_encrypted_at_rest_and_decrypted_for_rag(client: TestClient) -> None:
-    csrf_token = login(client)
-
-    response = client.post(
-        "/assistant",
-        data={
-            "csrf_token": csrf_token,
-            "system_prompt": "Use docs.",
-            "fallback_reply": "Ask staff.",
-            "rag_enabled": "on",
-            "llm_base_url": "https://llm.example/v1",
-            "llm_api_key": "llm-secret-789",
-            "llm_model": "gpt-4o-mini",
-            "vision_model": "gpt-4o-mini",
-            "embedding_model": "text-embedding-3-small",
-        },
-        follow_redirects=False,
-    )
-
-    assert response.status_code == 303
-    with Session(get_engine()) as session:
-        assistant = session.get(AssistantSettings, 1)
-        assert assistant is not None
-        assert assistant.llm_api_key.startswith("enc:v1:")
-        assert "llm-secret-789" not in assistant.llm_api_key
-        assert decrypt_secret(assistant.llm_api_key, get_settings().app_encryption_key) == "llm-secret-789"
-        assert rag_service_from_assistant(assistant).llm_api_key == "llm-secret-789"
-
-    page = client.get("/assistant")
-    assert "llm-secret-789" not in page.text
-    assert "llm...789" in page.text

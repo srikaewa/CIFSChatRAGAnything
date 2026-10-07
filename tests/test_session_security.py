@@ -1,16 +1,26 @@
 import pytest
 from fastapi.testclient import TestClient
+from itsdangerous import URLSafeTimedSerializer
 
-from chatbot_manager.security import make_session_token, read_session_token
+from chatbot_manager.security import make_session_token, read_session_user_id
 from chatbot_manager.settings import Settings, get_settings, validate_deployment_settings
 
 
 def test_session_tokens_expire_and_reject_tampering() -> None:
-    token = make_session_token("admin@example.local")
+    token = make_session_token(7)
 
-    assert read_session_token(token, max_age_seconds=60) == "admin@example.local"
-    assert read_session_token(token, max_age_seconds=-1) is None
-    assert read_session_token(f"{token}tampered", max_age_seconds=60) is None
+    assert read_session_user_id(token, max_age_seconds=60) == 7
+    assert read_session_user_id(token, max_age_seconds=-1) is None
+    assert read_session_user_id(f"{token}tampered", max_age_seconds=60) is None
+
+
+def test_legacy_email_session_is_deliberately_invalidated() -> None:
+    legacy = URLSafeTimedSerializer(
+        get_settings().app_secret_key,
+        salt="admin-session",
+    ).dumps({"email": "admin@example.local"})
+
+    assert read_session_user_id(legacy, max_age_seconds=60) is None
 
 
 def test_production_settings_default_to_secure_cookies() -> None:

@@ -11,6 +11,8 @@ from chatbot_manager.models import (
     utc_now,
 )
 
+from .versions import clone_live_to_draft
+
 
 DEFAULT_BOT_NAME = "Default Bot"
 
@@ -108,67 +110,4 @@ def get_live_config(session: Session, bot_id: int) -> BotConfigVersion:
 
 
 def ensure_draft_config(session: Session, bot_id: int, actor: str) -> BotConfigVersion:
-    bot = session.get(Bot, bot_id)
-    if bot is None:
-        raise LookupError(f"Bot {bot_id} not found")
-
-    if bot.draft_config_version_id is not None:
-        existing = session.get(BotConfigVersion, bot.draft_config_version_id)
-        if existing is not None and existing.status == "draft":
-            return existing
-
-    live = get_live_config(session, bot_id)
-    versions = session.exec(
-        select(BotConfigVersion).where(BotConfigVersion.bot_id == bot_id)
-    ).all()
-    next_version = max((version.version_number for version in versions), default=0) + 1
-
-    draft = BotConfigVersion(
-        bot_id=bot_id,
-        version_number=next_version,
-        status="draft",
-        system_prompt=live.system_prompt,
-        tone=live.tone,
-        language=live.language,
-        response_style=live.response_style,
-        fallback_reply=live.fallback_reply,
-        fallback_policy=live.fallback_policy,
-        escalation_policy=live.escalation_policy,
-        custom_instructions=live.custom_instructions,
-        knowledge_service_id=live.knowledge_service_id,
-        created_by=actor,
-    )
-    session.add(draft)
-    session.commit()
-    session.refresh(draft)
-    if draft.id is None:
-        raise LookupError("Draft configuration could not be persisted")
-
-    live_rules = session.exec(
-        select(BotConfigRule)
-        .where(BotConfigRule.config_version_id == live.id)
-        .order_by(BotConfigRule.priority)
-    ).all()
-    for rule in live_rules:
-        session.add(
-            BotConfigRule(
-                config_version_id=draft.id,
-                name=rule.name,
-                enabled=rule.enabled,
-                priority=rule.priority,
-                match_type=rule.match_type,
-                pattern=rule.pattern,
-                condition_logic=rule.condition_logic,
-                conditions=rule.conditions,
-                action=rule.action,
-                reply_text=rule.reply_text,
-                escalate_message=rule.escalate_message,
-            )
-        )
-
-    bot.draft_config_version_id = draft.id
-    bot.updated_at = utc_now()
-    session.add(bot)
-    session.commit()
-    session.refresh(draft)
-    return draft
+    return clone_live_to_draft(session, bot_id, actor)

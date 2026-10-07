@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="conversation-head">
+  <div>
+    <p class="eyebrow"><a href="/conversations">Conversations</a> · {{ connection.provider|title }}</p>
+    <h1>{{ conversation.external_user_id }}</h1>
+    <p>{{ bot.name if bot else "Bot " ~ conversation.bot_id }} · {{ assigned_label }}</p>
+  </div>
+  <span class="status-chip status-{{ conversation.status }}">{{ status_label }}</span>
+</section>
+
+{% if request.query_params.get('taken') %}<p class="alert alert-success">Conversation taken.</p>{% endif %}
+{% if request.query_params.get('assigned') %}<p class="alert alert-success">Conversation assigned.</p>{% endif %}
+{% if request.query_params.get('replied') %}<p class="alert alert-success">Reply recorded and delivery attempted.</p>{% endif %}
+{% if request.query_params.get('returned') %}<p class="alert alert-success">Bot control restored. No previous message was replayed.</p>{% endif %}
+{% if request.query_params.get('closed') %}<p class="alert alert-success">Conversation closed.</p>{% endif %}
+{% if request.query_params.get('noted') %}<p class="alert alert-success">Internal note added.</p>{% endif %}
+
+<div class="conversation-layout">
+  <section class="conversation-stream" aria-label="Conversation messages">
+    {% for message in messages %}
+      {% if message.sender_type == "internal_note" %}
+      <article class="message-card message-internal">
+        <div class="message-meta">Internal note · {{ message.created_at }}</div>
+        <p>{{ message.content }}</p>
+      </article>
+      {% elif message.sender_type == "system" %}
+      <article class="message-card message-system">
+        <div class="message-meta">System · {{ message.created_at }}</div>
+        <p>{{ message.content }}</p>
+      </article>
+      {% else %}
+      <article class="message-card message-{{ message.sender_type }}">
+        <div class="message-meta">
+          {{ message.sender_type|title }} · {{ message.created_at }}
+          {% if message.delivery_status %} · {{ message.delivery_status|title }}{% endif %}
+        </div>
+        <p>{{ message.content }}</p>
+        {% if message.sender_type == "user" %}
+        <form method="post" action="/conversations/{{ conversation.id }}/messages/{{ message.id }}/add-test-case">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+          <button type="submit" class="action-btn">Add to Test Suite</button>
+        </form>
+        {% endif %}
+      </article>
+      {% endif %}
+    {% else %}
+    <article class="panel"><p>No messages yet.</p></article>
+    {% endfor %}
+  </section>
+
+  <aside class="conversation-side">
+    <section class="panel conversation-actions">
+      <h2>Human handoff</h2>
+      <p>Status: <strong>{{ status_label }}</strong></p>
+      {% if conversation.status == "needs_human" %}
+      <form method="post" action="/conversations/{{ conversation.id }}/take">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <button type="submit">Take conversation</button>
+      </form>
+      {% elif conversation.status == "human_active" %}
+      <form method="post" action="/conversations/{{ conversation.id }}/reply" class="conversation-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <label>Reply to user
+          <textarea name="reply_text" rows="4" required></textarea>
+        </label>
+        <button type="submit">Send reply</button>
+      </form>
+      <form method="post" action="/conversations/{{ conversation.id }}/return-to-bot">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <button type="submit" class="action-btn">Return to Bot</button>
+      </form>
+      {% endif %}
+      {% if conversation.status != "closed" %}
+      <form method="post" action="/conversations/{{ conversation.id }}/close" class="conversation-form compact-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <input type="hidden" name="reason" value="resolved">
+        <button type="submit" class="action-btn danger">Close conversation</button>
+      </form>
+      {% endif %}
+    </section>
+
+    <section class="panel conversation-actions">
+      <h2>Internal note</h2>
+      <form method="post" action="/conversations/{{ conversation.id }}/note" class="conversation-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_for(admin_email) }}">
+        <label>Visible to operators only
+          <textarea name="note_text" rows="3" required></textarea>
+        </label>
+        <button type="submit" class="action-btn">Add note</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Handoff history</h2>
+      <div class="trace-list">
+        {% for event in events %}
+        <div><strong>{{ event.event_type|replace('_', ' ')|title }}</strong><br><small>{{ event.created_at }}{% if event.reason %} · {{ event.reason }}{% endif %}</small></div>
+        {% else %}<p>No handoff events.</p>{% endfor %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Decision Trace</h2>
+      <div class="trace-list">
+        {% for decision in decisions %}
+        <div>
+          <strong>{{ decision.decision_type|title }}</strong>
+          <br><small>Config {{ decision.config_version_id }} · refs {{ decision.reference_count }} · {{ decision.total_latency_ms }} ms{% if decision.error_code %} · {{ decision.error_code }}{% endif %}</small>
+        </div>
+        {% else %}<p>No Bot decisions recorded.</p>{% endfor %}
+      </div>
+    </section>
+  </aside>
+</div>
+{% endblock %}

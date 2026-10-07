@@ -1,7 +1,7 @@
 import base64
 import hashlib
 import hmac
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -14,10 +14,14 @@ class IncomingMessage:
     text: str
     reply_context: dict[str, Any]
     raw_event: dict[str, Any]
+    external_message_id: str = ""
+    timestamp_ms: int | None = None
+    attachments: list[dict[str, Any]] = field(default_factory=list)
 
 
 class LineAdapter:
     reply_url = "https://api.line.me/v2/bot/message/reply"
+    push_url = "https://api.line.me/v2/bot/message/push"
 
     def __init__(self, channel_secret: str, channel_access_token: str) -> None:
         self.channel_secret = channel_secret
@@ -37,25 +41,45 @@ class LineAdapter:
             if event.get("type") != "message" or message.get("type") != "text":
                 continue
             text = message.get("text", "")
-            if not text:
+            external_message_id = message.get("id", "")
+            if not text or not external_message_id:
                 continue
+            timestamp = event.get("timestamp")
+            user_id = event.get("source", {}).get("userId", "")
             messages.append(
                 IncomingMessage(
                     provider="line",
-                    external_user_id=event.get("source", {}).get("userId", ""),
+                    external_message_id=str(external_message_id),
+                    external_user_id=user_id,
                     text=text,
-                    reply_context={"reply_token": event.get("replyToken", "")},
+                    timestamp_ms=timestamp if isinstance(timestamp, int) else None,
+                    reply_context={
+                        "reply_token": event.get("replyToken", ""),
+                        "user_id": user_id,
+                    },
+                    attachments=[],
                     raw_event=event,
                 )
             )
         return messages
 
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.channel_access_token}"}
+
     async def send_reply(self, reply_context: dict[str, Any], text: str) -> None:
-        headers = {"Authorization": f"Bearer {self.channel_access_token}"}
         payload = {
             "replyToken": reply_context["reply_token"],
             "messages": [{"type": "text", "text": text}],
         }
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(self.reply_url, json=payload, headers=headers)
+            response = await client.post(self.reply_url, json=payload, headers=self._headers())
+            response.raise_for_status()
+
+    async def send_push(self, user_id: str, text: str) -> None:
+        payload = {
+            "to": user_id,
+            "messages": [{"type": "text", "text": text}],
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(self.push_url, json=payload, headers=self._headers())
             response.raise_for_status()

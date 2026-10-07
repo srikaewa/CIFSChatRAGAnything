@@ -1,5 +1,4 @@
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,29 +21,19 @@ class Settings(BaseSettings):
     cookie_secure: bool = True
 
     database_url: str = "sqlite:///./data/chatbot.sqlite3"
-    dashboard_url: str = "http://localhost:8000"
-    api_public_url: str = "http://localhost:8000"
 
-    line_channel_secret: str = ""
-    line_channel_access_token: str = ""
-    messenger_verify_token: str = ""
-    messenger_page_access_token: str = ""
-    messenger_app_secret: str = ""
-    telegram_bot_token: str = ""
-    
-    llm_provider: str = "openai_compatible"
-    llm_base_url: str = "https://api.openai.com/v1"
-    llm_api_key: str = ""
-    llm_default_model: str = "gpt-4o-mini"
-    llm_vision_model: str = "gpt-4o-mini"
-    llm_embedding_model: str = "text-embedding-3-small"
+    ops_poll_seconds: int = 60
+    warning_persist_minutes: int = 15
+    human_wait_warning_minutes: int = 10
+    human_wait_critical_minutes: int = 30
+    rag_latency_warning_ms: int = 3000
+    rag_latency_critical_ms: int = 8000
+    alert_telegram_bot_token: str = ""
+    alert_telegram_chat_id: str = ""
 
-    rag_backend: str = "rag_anything"
-    rag_working_dir: Path = Path("./data/rag")
-    rag_parser: str = "mineru"
-    rag_parse_method: str = "auto"
-    upload_dir: Path = Path("./data/uploads")
-    max_upload_bytes: int = 25_000_000
+    conversation_retention_days: int = 365
+    incident_retention_days: int = 730
+    audit_retention_days: int = 1095
 
 
 def validate_deployment_settings(settings: Settings) -> None:

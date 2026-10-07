@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">Operations</p>
+  <h1>Incidents</h1>
+  <p>Filter active and historical operational incidents by severity, status, or source.</p>
+</section>
+
+<form class="panel operations-filters" method="get" action="/incidents">
+  <label>Severity
+    <select name="severity">
+      <option value="">All severities</option>
+      {% for value in ["critical", "warning", "info"] %}
+      <option value="{{ value }}" {{ "selected" if filters.severity == value else "" }}>{{ value|title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Status
+    <select name="status">
+      <option value="">All statuses</option>
+      {% for value in ["open", "acknowledged", "resolved"] %}
+      <option value="{{ value }}" {{ "selected" if filters.status == value else "" }}>{{ value|title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Source
+    <input name="source" value="{{ filters.source }}" placeholder="channel, system...">
+  </label>
+  <button type="submit">Apply filters</button>
+  <a class="btn-ghost" href="/incidents">Clear</a>
+</form>
+
+{% if incidents %}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>Severity</th><th>Incident</th><th>Source</th><th>Status</th><th>First seen</th><th></th></tr></thead>
+    <tbody>
+      {% for incident in incidents %}
+      <tr>
+        <td><span class="severity-badge severity-{{ incident.severity }}">{{ incident.severity|title }}</span></td>
+        <td>{{ incident.incident_type }}</td>
+        <td>{{ incident.source_type }}/{{ incident.source_id }}</td>
+        <td>{{ incident.status|title }}</td>
+        <td>{{ incident.first_seen_at }}</td>
+        <td><a class="action-btn" href="/incidents/{{ incident.id }}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<section class="panel"><h2>No incidents match these filters</h2></section>
+{% endif %}
+{% endblock %}

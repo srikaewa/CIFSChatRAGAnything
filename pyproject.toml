@@ -1,7 +1,7 @@
 [project]
 name = "cifs-chatbot-manager"
 version = "0.1.0"
-description = "Local admin manager for LINE and Facebook Messenger chatbots with RAG-Anything."
+description = "Multi-bot operations and administration manager for CIFS chat channels."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
@@ -14,8 +14,6 @@ dependencies = [
   "cryptography>=43.0.0",
   "pwdlib[argon2]>=0.2.1",
   "pydantic-settings>=2.4.0",
-  "raganything>=1.0.0",
-  "python-telegram-bot>=21.0"
 ]
 
 [dependency-groups]
