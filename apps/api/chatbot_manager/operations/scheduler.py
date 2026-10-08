@@ -99,6 +99,16 @@ class OperationsScheduler:
         if signal.status == "healthy":
             await self._resolve_source(signal.source_type, signal.source_id)
             return
+        if (
+            signal.source_type == "channel"
+            and signal.status == "unknown"
+            and signal.code
+            in {"channel_recent_activity", "channel_configured_no_active_probe"}
+        ):
+            await self._resolve_exact(
+                signal.source_type, signal.source_id, "channel_not_ready"
+            )
+            return
         if signal.status == "unknown" or signal.severity not in {"warning", "critical"}:
             return
 

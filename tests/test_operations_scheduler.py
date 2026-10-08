@@ -166,8 +166,12 @@ async def test_run_once_resolves_recovered_incident() -> None:
         assert alerts.calls == [(row.id, "resolved")]
 
 
+@pytest.mark.parametrize(
+    "code",
+    ("channel_recent_activity", "channel_configured_no_active_probe"),
+)
 @pytest.mark.asyncio
-async def test_unknown_health_does_not_resolve_existing_incident() -> None:
+async def test_ready_channel_signal_resolves_stale_not_ready_incident(code: str) -> None:
     engine = memory_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
@@ -181,6 +185,7 @@ async def test_unknown_health_does_not_resolve_existing_incident() -> None:
                 affected_bot_ids=(2,),
             )
         )
+        alerts = FakeAlertService()
         scheduler = OperationsScheduler(
             session,
             settings(),
@@ -191,20 +196,21 @@ async def test_unknown_health_does_not_resolve_existing_incident() -> None:
                         "7",
                         "unknown",
                         None,
-                        "channel_recent_activity",
+                        code,
                         affected_bot_ids=(2,),
                     )
                 ]
             ),
-            alert_service=FakeAlertService(),
+            alert_service=alerts,
             now_factory=lambda: NOW,
         )
 
         await scheduler.run_once()
 
         session.refresh(row)
-        assert row.status == "open"
-        assert row.resolved_at is None
+        assert row.status == "resolved"
+        assert row.resolved_at is not None
+        assert alerts.calls == [(row.id, "resolved")]
 
 
 @pytest.mark.asyncio
